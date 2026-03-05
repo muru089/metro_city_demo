@@ -1,0 +1,4 @@
+name: metro_city
+description: Metro City Customer Service Agent
+version: 1.0.0
+entry_point: agent.py

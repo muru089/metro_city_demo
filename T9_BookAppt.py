@@ -1,130 +1,152 @@
 """
 T9_BookAppt
-Function: The "Calendar." Books a new installation slot (AM or PM).
-Business Logic: 
-    1. Only allows booking for future dates (tomorrow or later).
-    2. Enforces a 30-Day Booking Window (cannot book more than 30 days out).
-    3. Used when T3 says a technician is required.
-Customer Use Case:
-    Primary: "Schedule the tech for next Tuesday AM" 
-    Secondary: "I want a morning appointment." / "Do you have anything in the PM?"
-    Constraint: This tool is ONLY used if T3 returns "Technician Install.
-    
-Logic Specification
-    Goal: To simulate a real technician's calendar.
-    Scenario A (No Date Provided): The user asks "When can you come?"
-        Action: The tool calculates "today" and automatically generates 4 available slots starting 2 days from now.
-    Scenario B (Specific Date Provided): The user asks "Can you come on 2026-05-20?"
-        Action: The tool checks if that date is:
-            a) In the future (Valid).
-            b) Within the next 30 days (Valid).
-            c) Returns "Confirmed" or "Error" based on these checks.
+-----------
+WHAT THIS TOOL DOES:
+    Simulates a technician appointment calendar.
+    Two modes depending on whether a date is provided:
+
+    NO DATE (Rule of 4): Returns 4 available slots -- 2 days x AM + PM -- starting 2 days out.
+    WITH DATE: Validates the requested date and confirms it if it's within the booking window.
+
+WHY IT MATTERS (Business Logic):
+    - Only called when T3_EquipmentLogic returns "Technician Install" (Fiber addresses).
+      Self-install addresses never need an appointment.
+    - The "Rule of 4" pattern: always offer exactly 4 options initially.
+      This gives the customer real choices without overwhelming them.
+    - 30-day booking window is enforced: no bookings more than 30 days from today.
+    - This tool does NOT use the database -- it simulates an always-available calendar
+      for demo purposes. In a real system, it would check actual technician availability.
+
+INPUTS:
+    conn     : Database connection (passed in for consistency -- not used by this tool).
+    date_str : A specific date in YYYY-MM-DD format (optional).
+               If not provided, returns the 4 next available slots.
+               If provided, confirms or rejects that specific date.
+
+OUTPUT:
+    No date  : {"status": "success", "available_slots": ["2026-03-07 (8:00 AM - 12:00 PM)", ...]}
+    With date: {"status": "success", "message": "Appointment confirmed for 2026-03-07.", "booked_date": "..."}
+    Error    : {"status": "error",   "message": "reason (past date / beyond 30 days / bad format)"}
 """
 
 import sqlite3
 from datetime import datetime, timedelta
 
+
 def T9_BookAppt(conn, date_str=None):
     """
-    T_Book: Checks for appointment availability or confirms a specific date.
-    
+    Lists available appointment slots or confirms a specific date.
+
     Args:
-        conn: The database connection (not used here, but kept for consistency).
-        date_str (str, optional): A specific date the user wants (Format: 'YYYY-MM-DD').
-                                  If empty, we return the next 4 available slots.
-    
+        conn     : Database connection (not used -- kept for interface consistency).
+        date_str : Requested date in YYYY-MM-DD format (optional).
+                   Omit to receive the next 4 available slots.
+
     Returns:
-        dict: Contains the 'status' and either a list of 'slots' or a 'confirmation'.
+        dict: Available slots list OR confirmation of a specific date.
     """
-    
-    # 1. GET "TODAY" AND "MAX DATE"
+
     today = datetime.now()
-    
-    # NEW RULE: Calculate the 30-Day Horizon
+
+    # The 30-day horizon -- the furthest date we will accept for booking.
     max_date = today + timedelta(days=30)
-    
-    # --- SCENARIO A: User did NOT provide a date (They want options) ---
+
+    # =========================================================================
+    # SCENARIO A: No date given -- return the Rule of 4 slots
+    # Generate 4 options: 2 days x (AM window + PM window), starting 2 days from today.
+    # We start 2 days out (not tomorrow) to give logistics time to prepare.
+    # =========================================================================
     if not date_str:
-        # We need to generate the "Rule of 4" (4 slots starting 2 days from now)
-        
         slots = []
-        
-        # Loop 2 times (for 2 days)
+
         for i in range(2):
-            # Calculate the date: Today + 2 days + i (extra days)
+            # Day 1 = today + 2, Day 2 = today + 3
             future_date = today + timedelta(days=2 + i)
-            
-            # Format the date to look nice (e.g., "2026-05-15")
             formatted_date = future_date.strftime("%Y-%m-%d")
-            
-            # Add a Morning slot (8:00 AM - 12:00 PM)
+
+            # Morning window: 8:00 AM to 12:00 PM
             slots.append(f"{formatted_date} (8:00 AM - 12:00 PM)")
-            
-            # Add an Afternoon slot (1:00 PM - 5:00 PM)
+
+            # Afternoon window: 1:00 PM to 5:00 PM
             slots.append(f"{formatted_date} (1:00 PM - 5:00 PM)")
-            
-        # Return the list of 4 generated slots
+
         return {
             "status": "success",
             "message": "Here are the next available appointments:",
-            "available_slots": slots
+            "available_slots": slots  # Always exactly 4 items
         }
 
-    # --- SCENARIO B: User PROVIDED a specific date (They want to confirm) ---
+    # =========================================================================
+    # SCENARIO B: Date given -- validate and confirm it
+    # =========================================================================
     else:
         try:
-            # Convert the text string "2026-05-20" into a real Date object
+            # Convert the string (e.g., "2026-03-07") to a Python date object.
+            # strptime raises ValueError if the format doesn't match.
             requested_date = datetime.strptime(date_str, "%Y-%m-%d")
-            
-            # CHECK 1: Past Date
+
+            # Check 1: Reject past dates
             if requested_date.date() < today.date():
                 return {
-                    "status": "error", 
+                    "status": "error",
                     "message": "That date is in the past. Please choose a future date."
                 }
-            
-            # CHECK 2: Max Lead Time (NEW 30-DAY RULE)
+
+            # Check 2: Reject dates beyond the 30-day window
             if requested_date.date() > max_date.date():
-                 return {
-                    "status": "error", 
-                    "message": f"I can only book appointments within the next 30 days (before {max_date.strftime('%Y-%m-%d')}). Please choose an earlier date."
+                return {
+                    "status": "error",
+                    "message": (
+                        f"I can only book appointments within the next 30 days "
+                        f"(before {max_date.strftime('%Y-%m-%d')}). "
+                        "Please choose an earlier date."
+                    )
                 }
-            
-            # If it passes both checks, we "fake" confirm it (assume we are always available)
+
+            # Passed both checks -- confirm the appointment.
+            # (In a real system this would write to a calendar API.)
             return {
                 "status": "success",
                 "message": f"Appointment confirmed for {date_str}.",
                 "booked_date": date_str
             }
-            
+
         except ValueError:
-            # This happens if the user types a date we don't understand (like "next tuesday")
+            # The date string didn't match YYYY-MM-DD format.
             return {
-                "status": "error", 
-                "message": "Invalid date format. Please use YYYY-MM-DD."
+                "status": "error",
+                "message": "Invalid date format. Please use YYYY-MM-DD (e.g., 2026-03-15)."
             }
 
-# --- TEST SNIPPET ---
-# This block only runs if you play this file directly.
-if __name__ == "__main__":
-    # We don't need a real DB connection for this tool, so we pass None
-    dummy_conn = None
-    
-    print("--- Test 1: User asks for options ---")
-    result_options = T9_BookAppt(dummy_conn)
-    # This prints the 4 slots logic
-    print(result_options)
-    
-    print("\n--- Test 2: User picks a specific VALID date (Tomorrow) ---")
-    tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
-    result_confirm = T9_BookAppt(dummy_conn, tomorrow)
-    print(result_confirm)
-    
-    print("\n--- Test 3: User picks a PAST date ---")
-    result_fail_past = T9_BookAppt(dummy_conn, "1990-01-01")
-    print(result_fail_past)
 
-    print("\n--- Test 4: User picks a date TOO FAR in future (>30 Days) ---")
-    future_far = (datetime.now() + timedelta(days=60)).strftime("%Y-%m-%d")
-    result_fail_far = T9_BookAppt(dummy_conn, future_far)
-    print(result_fail_far)
+# =============================================================================
+# TEST BLOCK
+# Run this file directly (python T9_BookAppt.py) to test in isolation.
+# No database needed -- pass None as the connection.
+# =============================================================================
+if __name__ == "__main__":
+    print("=== T9_BookAppt -- Manual Test Run ===\n")
+
+    print("--- Test 1: No date -- show Rule of 4 slots ---")
+    print("Expected: 4 slots starting 2 days from today")
+    print(T9_BookAppt(None))
+
+    print("\n--- Test 2: Valid future date (tomorrow) ---")
+    tomorrow = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+    print(f"Testing with: {tomorrow}")
+    print("Expected: confirmed")
+    print(T9_BookAppt(None, tomorrow))
+
+    print("\n--- Test 3: Past date ---")
+    print("Expected: error / past date")
+    print(T9_BookAppt(None, "2020-01-01"))
+
+    print("\n--- Test 4: Date beyond 30 days ---")
+    far_future = (datetime.now() + timedelta(days=60)).strftime("%Y-%m-%d")
+    print(f"Testing with: {far_future}")
+    print("Expected: error / beyond 30 days")
+    print(T9_BookAppt(None, far_future))
+
+    print("\n--- Test 5: Bad date format ---")
+    print("Expected: error / invalid format")
+    print(T9_BookAppt(None, "next tuesday"))

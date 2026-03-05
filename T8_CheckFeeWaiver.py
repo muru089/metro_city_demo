@@ -1,125 +1,167 @@
 """
 T8_CheckFeeWaiver
-Function: The "Judge." Evaluates if the customer deserves a free installation.
-Business Logic: Checks the strict "3-Rule Logic": Tenure > 3 Years AND Autopay On AND No recent waivers.
-Customer Use Case:
-    Primary: "Can you waive the installation fee?" 
-    Secondary (Explanation): "Why are you charging me $99?" (The tool returns the specific failure reason, e.g., "Tenure < 3 years"). 
-    Implicit: The Agent proactively runs this during a "Move" flow to delight the customer ("Good news! You qualify for a waiver").
+-----------------
+WHAT THIS TOOL DOES:
+    Evaluates whether a customer qualifies for a $0 installation fee.
+    This is a strict "AND gate" -- ALL THREE rules must pass.
+    If any single rule fails, the $99 fee applies.
 
-Logic Specification
-    Input: account_id (Required).
-    Logic:
-        1. Retrieve Data: Query the customer's tenure_years, autopay_active status, and last_waiver_date.
-        2. Evaluate Rules (The "AND" Gate):
-            Rule A (Tenure): Is tenure_years > 3? 
-            Rule B (Autopay): Is autopay_active TRUE? 
-            Rule C (History): Is last_waiver_date either Null (never used) or older than 12 months? 
-        3. Determine Outcome:
-            Pass (All True): Fee is $0.00. Return success message.
-            Fail (Any False): Fee is $99.00. Return failure message with the specific reason (e.g., "Tenure is less than 3 years").
-    Output: A dictionary containing the waiver_status (Pass/Fail), the installation_fee amount ($0 or $99), and the explanation.
+    Rule A -- Tenure:   Customer must have been with Metro City for MORE than 3 years.
+    Rule B -- Autopay:  Customer must have autopay currently active.
+    Rule C -- History:  Customer must NOT have used a waiver in the last 12 months.
+
+WHY IT MATTERS (Business Logic):
+    - The $99 fee is standard for any tech-install appointment.
+    - Loyal, trusted customers (long tenure + autopay) get rewarded with a free install.
+    - The tool always returns the SPECIFIC reason for failure -- never a vague "you don't qualify."
+      This helps the agent explain clearly, and gives the customer a path to qualify next time.
+    - Called by moves_agent (during Technician Install flows), billing_agent (discount inquiries),
+      and sales_agent (when a customer asks for a promotion or discount).
+
+INPUTS:
+    conn       : Database connection (injected automatically).
+    account_id : Customer's 5-digit ID (e.g., 10001).
+
+OUTPUT:
+    Waiver approved: {"status": "success", "waiver_applied": True,  "installation_fee": 0.00,  "message": "..."}
+    Waiver denied  : {"status": "success", "waiver_applied": False, "installation_fee": 99.00, "message": "...reason..."}
+    Error          : {"status": "error",   "message": "reason"}
+
+NOTE: status="success" on a denied waiver is intentional -- the tool ran successfully,
+it just determined the customer doesn't qualify. The waiver_applied flag is the real signal.
 """
-
 
 import sqlite3
 from datetime import datetime, timedelta
 
+
 def T8_CheckFeeWaiver(conn, account_id):
     """
-    T_CheckFeeWaiver: Evaluates eligibility for the $99 installation fee waiver.
-    Logic: Must meet ALL 3 criteria (Tenure > 3, Autopay = On, No Recent Waivers).
-    
+    Checks if a customer qualifies for the $99 installation fee waiver.
+    All three rules (tenure, autopay, waiver history) must pass.
+
     Args:
-        conn: The active database connection.
-        account_id (int or str): The customer's ID.
-    
+        conn       : Active SQLite database connection (injected by the agent framework).
+        account_id : The customer's 5-digit ID (e.g., 10001).
+
     Returns:
-        dict: Waiver status and the final fee amount.
+        dict: Waiver result, final fee amount, and specific reason if denied.
     """
-    
+
     cursor = conn.cursor()
-    
-    # Standard Fee
+
+    # The standard installation fee -- applied when any rule fails.
     INSTALL_FEE = 99.00
-    
+
     try:
-        # --- STEP 1: FETCH CUSTOMER DATA ---
-        # We need tenure, autopay status, and waiver history
+        # Fetch the three data points we need to evaluate the rules.
         cursor.execute(
-            "SELECT tenure_years, autopay_active, last_waiver_date FROM customer_accounts WHERE account_id = ?",
+            """
+            SELECT tenure_years, autopay_active, last_waiver_date
+            FROM   customer_accounts
+            WHERE  account_id = ?
+            """,
             (account_id,)
         )
         result = cursor.fetchone()
-        
+
         if not result:
             return {"status": "error", "message": "Account ID not found."}
-            
+
         tenure_years, autopay_active, last_waiver_date = result
-        
-        # --- STEP 2: EVALUATE RULES ---
+
+        # =====================================================================
+        # EVALUATE THE THREE RULES
+        # We collect all failure reasons so the agent can explain each one.
+        # This is better than stopping at the first failure -- the customer
+        # might need to fix multiple things to qualify in the future.
+        # =====================================================================
         reasons_for_failure = []
-        
-        # Rule A: Tenure > 3 Years
+
+        # Rule A: Tenure must be MORE than 3 years (not equal to 3)
         if tenure_years <= 3:
-            reasons_for_failure.append(f"Tenure is {tenure_years} years (Requires > 3)")
-            
-        # Rule B: Autopay Must be Active
-        # SQLite Booleans: 1 = True, 0 = False
+            reasons_for_failure.append(
+                f"Tenure is {tenure_years} years (must be greater than 3 years)"
+            )
+
+        # Rule B: Autopay must be active
+        # SQLite stores booleans as 1 (True) or 0 (False)
         if not autopay_active:
-            reasons_for_failure.append("Autopay is not active")
-            
-        # Rule C: No Waivers in Last 12 Months
+            reasons_for_failure.append("Autopay is not active on your account")
+
+        # Rule C: No waiver used in the last 12 months
+        # If last_waiver_date is NULL (never used), this rule passes automatically.
         if last_waiver_date:
             try:
                 last_date = datetime.strptime(last_waiver_date, "%Y-%m-%d")
                 one_year_ago = datetime.now() - timedelta(days=365)
-                
+
                 if last_date > one_year_ago:
-                    reasons_for_failure.append("Waiver used within the last 12 months")
+                    reasons_for_failure.append(
+                        "A waiver was already used within the last 12 months"
+                    )
             except ValueError:
-                # If date is invalid, we ignore it (Benefit of the doubt)
+                # If the date in the DB is malformed, give the benefit of the doubt.
                 pass
 
-        # --- STEP 3: DETERMINE OUTCOME ---
-        
-        # PASS: No failures found
+        # =====================================================================
+        # DETERMINE THE OUTCOME
+        # =====================================================================
         if not reasons_for_failure:
+            # All rules passed -- waiver approved
             return {
                 "status": "success",
                 "waiver_applied": True,
                 "installation_fee": 0.00,
-                "message": "Good news, I can waive the installation fee."
+                "message": "Great news -- your installation fee is waived!"
             }
-            
-        # FAIL: At least one failure found
         else:
+            # One or more rules failed -- fee applies, with full explanation
             reason_str = "; ".join(reasons_for_failure)
             return {
-                "status": "success", # The check "succeeded", even if the waiver failed
+                "status": "success",   # Tool ran successfully -- just the waiver that failed
                 "waiver_applied": False,
                 "installation_fee": INSTALL_FEE,
-                "message": f"I checked your eligibility, but the ${INSTALL_FEE:.2f} fee applies because: {reason_str}."
+                "message": f"The ${INSTALL_FEE:.2f} installation fee applies because: {reason_str}."
             }
 
     except sqlite3.Error as e:
         return {"status": "error", "message": str(e)}
 
-# --- TEST SNIPPET ---
+
+# =============================================================================
+# TEST BLOCK
+# Run this file directly (python T8_CheckFeeWaiver.py) to test in isolation.
+# Uses an in-memory database so no real data is affected.
+# =============================================================================
 if __name__ == "__main__":
+    # Build a minimal in-memory DB for testing -- no need for the full metro_city.db
     conn = sqlite3.connect(":memory:")
-    conn.execute("CREATE TABLE customer_accounts (account_id INTEGER, tenure_years REAL, autopay_active BOOLEAN, last_waiver_date TEXT)")
-    
-    # 1. Muru (Perfect Candidate): 5 years, Autopay ON, No History
-    conn.execute("INSERT INTO customer_accounts VALUES (10001, 5.0, 1, NULL)")
-    
-    # 2. John (Newbie): 1 year, Autopay OFF
-    conn.execute("INSERT INTO customer_accounts VALUES (10002, 1.0, 0, NULL)")
-    
-    print("--- Test 1: Muru (Should Pass) ---")
+    conn.execute(
+        "CREATE TABLE customer_accounts "
+        "(account_id INTEGER, tenure_years REAL, autopay_active INTEGER, last_waiver_date TEXT)"
+    )
+
+    # Muru: 4.2yr tenure, autopay ON, no waiver history -> should PASS all 3 rules
+    conn.execute("INSERT INTO customer_accounts VALUES (10001, 4.2, 1, NULL)")
+
+    # John: 0.5yr tenure, autopay OFF -> should FAIL rules A and B
+    conn.execute("INSERT INTO customer_accounts VALUES (10002, 0.5, 0, NULL)")
+
+    # Emily: 3.1yr tenure, autopay ON, waiver used 2 months ago -> FAIL rules A and C
+    from datetime import datetime, timedelta
+    recent_waiver = (datetime.now() - timedelta(days=60)).strftime("%Y-%m-%d")
+    conn.execute(f"INSERT INTO customer_accounts VALUES (10005, 3.1, 1, '{recent_waiver}')")
+
+    print("=== T8_CheckFeeWaiver -- Manual Test Run ===\n")
+
+    print("--- Test 1: Muru (should PASS -- waiver approved) ---")
     print(T8_CheckFeeWaiver(conn, 10001))
-    
-    print("\n--- Test 2: John (Should Fail) ---")
+
+    print("\n--- Test 2: John (should FAIL -- tenure + autopay) ---")
     print(T8_CheckFeeWaiver(conn, 10002))
-    
+
+    print("\n--- Test 3: Emily (should FAIL -- tenure + recent waiver) ---")
+    print(T8_CheckFeeWaiver(conn, 10005))
+
     conn.close()

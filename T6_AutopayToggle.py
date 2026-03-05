@@ -1,127 +1,146 @@
 """
 T6_AutopayToggle
-Function: The "Switch." Turns Autopay ON or OFF.
-Business Logic: Enabling this is often a requirement to get the Fee Waiver (T10).
-Customer Use Case:
-    Primary (Write): "Turn on autopay." / "Disable autopay." 
-    Secondary (Read): "Is my autopay currently on?"
-    Implicit: A user might turn this on specifically to pass the fee waiver check (T8)
+----------------
+WHAT THIS TOOL DOES:
+    Manages the autopay setting on a customer account.
+    Has two modes depending on whether an action is provided:
 
-Logic Specification
-Input:
-	account_id (Required).
-	action (Optional): Accepted values are "ON", "OFF", or None (Blank).
-Logic:
-	Normalize Input: Convert action to uppercase (e.g., "on" $\to$ "ON").
-	Read Mode (If action is Blank):
-		Query the autopay_active column for the user.
-		If 1 (True), return "ON". If 0 (False), return "OFF".
-	Update Mode (If action is "ON" or "OFF"):
-		Convert "ON" to True and "OFF" to False.
-		Run UPDATE customer_accounts SET autopay_active = [New_Value].
-	Validation: If action is anything else (e.g., "Yes"), return an Error.
-Output: A dictionary containing the status (success/error), the message, and the boolean state autopay_active.
+    READ MODE  (no action): Returns whether autopay is currently ON or OFF.
+    UPDATE MODE (action="ON" or "OFF"): Switches autopay to the requested state.
+
+WHY IT MATTERS (Business Logic):
+    - Autopay ON is one of the three requirements to qualify for the $99 install
+      fee waiver (checked by T8_CheckFeeWaiver).
+    - A customer who wants to qualify for the waiver might ask to enable autopay
+      mid-conversation -- this tool makes that happen instantly.
+    - billing_agent calls this when a customer says "turn on autopay" or "disable autopay".
+
+INPUTS:
+    conn       : Database connection (injected automatically).
+    account_id : Customer's 5-digit ID (e.g., 10001).
+    action     : "ON", "OFF", or None.
+                 None (default) = read-only status check.
+                 Any other value returns an error (prevents accidental changes).
+
+OUTPUT:
+    Read   : {"status": "success", "message": "Autopay is currently ON.", "autopay_active": True}
+    Update : {"status": "success", "message": "Autopay has been turned OFF.", "autopay_active": False}
+    Error  : {"status": "error",   "message": "reason"}
 """
-
-
 
 import sqlite3
 
+
 def T6_AutopayToggle(conn, account_id, action=None):
     """
-    T_Auto: Manages the Autopay setting for a customer.
-    
+    Reads or changes the autopay setting for a customer account.
+
     Args:
-        conn: The active database connection object.
-        account_id (int or str): The unique ID of the customer (e.g., 10001).
-        action (str, optional): The desired action.
-                                - "ON": Turn Autopay ON.
-                                - "OFF": Turn Autopay OFF.
-                                - None (Blank): Just check the current status.
-    
+        conn       : Active SQLite database connection (injected by the agent framework).
+        account_id : The customer's 5-digit ID (e.g., 10001).
+        action     : "ON" to enable, "OFF" to disable, or None to check current status.
+
     Returns:
-        dict: A summary of the current status or the change made.
+        dict: Current autopay status and confirmation message.
     """
-    
+
     cursor = conn.cursor()
-    
-    # Normalize the input (make it uppercase to handle "on", "On", "ON")
+
+    # Normalize input so "on", "On", "ON" all work the same way.
     if action:
         action = action.upper()
-    
+
     try:
-        # --- MODE A: UPDATE MODE (Change the setting) ---
+        # =====================================================================
+        # UPDATE MODE -- Change the autopay setting
+        # =====================================================================
         if action in ["ON", "OFF"]:
-            
-            # Convert "ON"/"OFF" to the format our database expects (TRUE/FALSE)
-            # In SQLite, Boolean is often stored as 1 (True) or 0 (False).
-            # Python automatically handles the conversion when we pass True/False.
-            new_status = (action == "ON") 
-            
-            # Execute the UPDATE command.
+
+            # Convert the string "ON"/"OFF" to a boolean.
+            # SQLite stores booleans as 1 (True) or 0 (False).
+            # Python's True/False converts automatically when passed to SQLite.
+            new_status = (action == "ON")
+
             cursor.execute(
-                "UPDATE customer_accounts SET autopay_active = ? WHERE account_id = ?", 
+                "UPDATE customer_accounts SET autopay_active = ? WHERE account_id = ?",
                 (new_status, account_id)
             )
-            
-            # Save the change permanently.
+
+            # commit() saves the change permanently.
             conn.commit()
-            
-            # Check if the account actually existed.
+
+            # If rowcount is 0, no rows were updated -- account doesn't exist.
             if cursor.rowcount == 0:
                 return {"status": "error", "message": "Account ID not found."}
-            
+
             return {
-                "status": "success", 
-                "message": f"Autopay has been turned {action}.", 
+                "status": "success",
+                "message": f"Autopay has been turned {action}.",
                 "autopay_active": new_status
             }
-            
-        # --- MODE B: READ MODE (Check the setting) ---
+
+        # =====================================================================
+        # READ MODE -- Check current autopay status without changing anything
+        # =====================================================================
         elif action is None:
-            # Query the current setting.
             cursor.execute(
-                "SELECT autopay_active FROM customer_accounts WHERE account_id = ?", 
+                "SELECT autopay_active FROM customer_accounts WHERE account_id = ?",
                 (account_id,)
             )
             result = cursor.fetchone()
-            
+
             if result:
-                # 'result[0]' will be 1 (True) or 0 (False).
-                is_active = bool(result[0]) 
-                
-                # Convert it back to a readable string for the Agent.
+                # SQLite returns 1 or 0 -- convert to Python bool for clarity
+                is_active = bool(result[0])
                 status_str = "ON" if is_active else "OFF"
-                
+
                 return {
-                    "status": "success", 
+                    "status": "success",
                     "message": f"Autopay is currently {status_str}.",
                     "autopay_active": is_active
                 }
             else:
                 return {"status": "error", "message": "Account ID not found."}
-        
-        # --- ERROR TRAP: INVALID INPUT ---
+
+        # =====================================================================
+        # INVALID INPUT -- Reject anything that isn't ON, OFF, or None
+        # =====================================================================
         else:
             return {
-                "status": "error", 
-                "message": "Invalid action. Please use 'ON', 'OFF', or leave blank."
+                "status": "error",
+                "message": "Invalid action. Please use 'ON', 'OFF', or leave blank to check status."
             }
 
     except sqlite3.Error as e:
         return {"status": "error", "message": str(e)}
 
-# --- TEST SNIPPET ---
+
+# =============================================================================
+# TEST BLOCK
+# Run this file directly (python T6_AutopayToggle.py) to test in isolation.
+# WARNING: This writes to the real database. Run z_reset_world.py to restore.
+# =============================================================================
 if __name__ == "__main__":
-    conn = sqlite3.connect("metro_city.db") 
-    
-    print("--- Test 1: Check Status (Account 10001) ---")
+    import os
+    DB_PATH = os.path.join(os.path.dirname(__file__), "metro_city.db")
+    conn = sqlite3.connect(DB_PATH)
+
+    print("=== T6_AutopayToggle -- Manual Test Run ===\n")
+
+    print("--- Test 1: Check current status for Muru (10001, autopay=ON) ---")
+    print("Expected: autopay_active=True")
     print(T6_AutopayToggle(conn, 10001))
-    
-    print("\n--- Test 2: Turn OFF (Account 10001) ---")
+
+    print("\n--- Test 2: Turn autopay OFF for Muru ---")
+    print("Expected: success, autopay_active=False")
     print(T6_AutopayToggle(conn, 10001, "OFF"))
-    
-    print("\n--- Test 3: Verify Change ---")
+
+    print("\n--- Test 3: Verify the change ---")
+    print("Expected: autopay_active=False")
     print(T6_AutopayToggle(conn, 10001))
-    
+
+    print("\n--- Test 4: Invalid action string ---")
+    print("Expected: error / invalid action")
+    print(T6_AutopayToggle(conn, 10001, "MAYBE"))
+
     conn.close()

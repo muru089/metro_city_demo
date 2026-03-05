@@ -1,103 +1,108 @@
 """
 T5_PayBill
-Function: The "Cashier." Processes a payment for the specific pending balance amount.
-Business Logic: Critical for the "Move Gate"—customers cannot move/cancel until this tool clears their balance to $0.00.
-Customer Use Case:
-    Primary: "Pay my bill." / "Pay my balance." 
-    Secondary: "Use the card on file to clear the balance."
-    Implicit (The Gatekeeper): When a user asks to "Move," the Agent checks the balance. If > $0, the Agent automatically triggers this payment flow. 
+----------
+WHAT THIS TOOL DOES:
+    Processes a payment against a customer's outstanding balance.
+    Supports full payment (pay everything) or partial payment (pay a specific amount).
 
-Logic Specification
-    Input: account_id (Required), payment_amount (Optional).
-    Logic:
-        Check Balance: Query the current pending_balance for the customer.
-        Validation:
-            If balance is $0.00, return "No balance due."
-            If payment_amount is not provided, assume the customer wants to pay the full balance.
-            If payment_amount < pending_balance, reduce the balance by that amount (partial pay).
-            If payment_amount >= pending_balance, set balance to 0 (full pay).
-        Action: Run UPDATE customer_accounts SET pending_balance = [New_Balance].
-    Output: Returns a success message confirming the amount paid and the remaining balance (if any).
+WHY IT MATTERS (Business Logic):
+    - This is the "unlock" tool for moves and cancellations. Customers cannot
+      move or cancel service until their balance is $0.00. This tool clears it.
+    - Called by billing_agent during direct payment requests and by moves_agent
+      when a customer agrees to pay their balance inline during a move flow.
+    - Always uses the card on file -- no new card details are ever accepted.
+
+INPUTS:
+    conn           : Database connection (injected automatically).
+    account_id     : Customer's 5-digit ID (e.g., 10004).
+    payment_amount : How much to charge (optional).
+                     If not provided, defaults to the full outstanding balance.
+                     If provided and less than the balance, reduces it by that amount.
+                     Overpayment is capped at the balance (no negative bills).
+
+OUTPUT:
+    Success: {"status": "success", "message": "...", "paid_amount": 82.45, "remaining_balance": 0.0}
+    No bill: {"status": "info",    "message": "No balance due."}
+    Error  : {"status": "error",   "message": "reason"}
 """
-    
+
 import sqlite3
+
 
 def T5_PayBill(conn, account_id, payment_amount=None):
     """
-    T_Pay: Processes a payment for a customer account.
-    
+    Processes a payment on a customer account.
+
     Args:
-        conn: The active database connection object.
-        account_id (int or str): The ID of the customer (e.g., 10004).
-        payment_amount (float, optional): The amount the user wants to pay.
-                                          If this is blank (None), we assume they want to pay the FULL balance.
-    
+        conn           : Active SQLite database connection (injected by the agent framework).
+        account_id     : The customer's 5-digit ID (e.g., 10004).
+        payment_amount : Amount to pay (float, optional). Omit to pay the full balance.
+
     Returns:
-        dict: A summary of what happened (status, amount paid, remaining balance).
+        dict: Payment result including amount paid and remaining balance.
     """
-    
-    # Create a 'cursor'. Think of this as the robot arm that executes SQL commands.
+
+    # A cursor executes SQL commands against the database.
     cursor = conn.cursor()
-    
+
     try:
-        # --- STEP 1: CHECK CURRENT BALANCE ---
-        # We need to know how much they owe BEFORE we can pay it.
-        # We run a SELECT query to get the 'pending_balance' for this specific ID.
+        # =====================================================================
+        # STEP 1: READ THE CURRENT BALANCE
+        # We need to know what they owe before we can process a payment.
+        # =====================================================================
         cursor.execute(
-            "SELECT pending_balance FROM customer_accounts WHERE account_id = ?", 
+            "SELECT pending_balance FROM customer_accounts WHERE account_id = ?",
             (account_id,)
         )
-        result = cursor.fetchone() # Fetch the first (and only) result.
-        
-        # If result is empty (None), it means that Account ID doesn't exist.
+        result = cursor.fetchone()
+
         if not result:
             return {"status": "error", "message": "Account ID not found."}
-            
-        # Extract the balance number from the result tuple (e.g., (82.45,) -> 82.45)
+
+        # Extract the balance from the row tuple (e.g., (82.45,) -> 82.45)
         current_balance = result[0]
-        
-        # --- STEP 2: VALIDATE THE PAYMENT ---
-        
-        # Case A: They don't owe anything.
+
+        # =====================================================================
+        # STEP 2: VALIDATE -- IS THERE ANYTHING TO PAY?
+        # =====================================================================
         if current_balance == 0.0:
             return {
-                "status": "info", 
+                "status": "info",
                 "message": "Good news! You have no balance due. Your account is fully paid."
             }
-        
-        # Case B: Determine how much to pay.
-        # If 'payment_amount' was provided by the user, use it.
-        # If it is None (user said "Pay my bill"), use the full 'current_balance'.
-        amount_to_pay = payment_amount if payment_amount is not None else current_balance
-        
-        # Sanity Check: You can't pay a negative amount.
-        if amount_to_pay <= 0:
-             return {"status": "error", "message": "Payment amount must be positive."}
 
-        # --- STEP 3: DO THE MATH ---
-        
-        # Calculate the New Balance.
-        # Logic: Current Balance minus Payment.
-        # We use 'max(0.0, ...)' to ensure the balance never drops below zero (no negative bills).
+        # If no payment_amount given, pay the full balance.
+        # This is the most common case: agent calls T5_PayBill without specifying an amount.
+        amount_to_pay = payment_amount if payment_amount is not None else current_balance
+
+        if amount_to_pay <= 0:
+            return {"status": "error", "message": "Payment amount must be a positive number."}
+
+        # =====================================================================
+        # STEP 3: CALCULATE THE NEW BALANCE
+        # max(0.0, ...) ensures the balance never goes negative.
+        # If the customer overpays, we only charge them what they actually owe.
+        # =====================================================================
         new_balance = max(0.0, current_balance - amount_to_pay)
-        
-        # Calculate the "Actual" amount paid.
-        # Why? If a user tries to pay $100 on a $50 bill, we only charge them $50.
-        actual_paid = current_balance - new_balance 
-        
-        # --- STEP 4: UPDATE THE DATABASE ---
-        
-        # Run the UPDATE command to save the new balance to the table.
+
+        # Actual amount charged = what they owed minus what's left
+        # (handles the overpayment case cleanly)
+        actual_paid = current_balance - new_balance
+
+        # =====================================================================
+        # STEP 4: WRITE THE NEW BALANCE TO THE DATABASE
+        # =====================================================================
         cursor.execute(
-            "UPDATE customer_accounts SET pending_balance = ? WHERE account_id = ?", 
+            "UPDATE customer_accounts SET pending_balance = ? WHERE account_id = ?",
             (new_balance, account_id)
         )
-        
-        # IMPORTANT: 'commit()' saves the changes permanently. 
-        # Without this, the payment would disappear when the script ends.
+
+        # commit() makes the change permanent -- without it, the update is lost.
         conn.commit()
-        
-        # --- STEP 5: RETURN THE RECEIPT ---
+
+        # =====================================================================
+        # STEP 5: RETURN THE RECEIPT SUMMARY
+        # =====================================================================
         return {
             "status": "success",
             "message": f"Payment of ${actual_paid:.2f} processed successfully.",
@@ -106,22 +111,35 @@ def T5_PayBill(conn, account_id, payment_amount=None):
         }
 
     except sqlite3.Error as e:
-        # If the database crashes or locks, this catches the error.
         return {"status": "error", "message": str(e)}
 
-# --- TEST SNIPPET ---
-# This block runs only if you play this file directly to test it.
+
+# =============================================================================
+# TEST BLOCK
+# Run this file directly (python T5_PayBill.py) to test in isolation.
+# WARNING: This writes to the real database. Run z_reset_world.py to restore.
+# =============================================================================
 if __name__ == "__main__":
-    # Connect to the database file
-    conn = sqlite3.connect("metro_city.db")
-    
-    print("--- Test 1: Paying Mike's Bill (Account 10004) ---")
-    # Mike owes $82.45. We pass None, so it should pay the full $82.45.
+    import os
+    DB_PATH = os.path.join(os.path.dirname(__file__), "metro_city.db")
+    conn = sqlite3.connect(DB_PATH)
+
+    print("=== T5_PayBill -- Manual Test Run ===\n")
+
+    print("--- Test 1: Pay Mike's full balance (10004 owes $82.45) ---")
+    print("Expected: paid_amount=82.45, remaining_balance=0.0")
     print(T5_PayBill(conn, 10004))
-    
-    print("\n--- Test 2: Paying Muru (Account 10001) ---")
-    # Muru owes $0.00. The tool should say "No balance due".
-    print(T5_PayBill(conn, 10001))
-    
-    # Close the connection when done testing
+
+    print("\n--- Test 2: Try to pay again (balance should now be $0) ---")
+    print("Expected: info / no balance due")
+    print(T5_PayBill(conn, 10004))
+
+    print("\n--- Test 3: Partial payment on Amanda (10009 owes $15.00) ---")
+    print("Expected: paid_amount=10.00, remaining_balance=5.00")
+    print(T5_PayBill(conn, 10009, 10.00))
+
+    print("\n--- Test 4: Account not found ---")
+    print("Expected: error / Account ID not found")
+    print(T5_PayBill(conn, 99999))
+
     conn.close()

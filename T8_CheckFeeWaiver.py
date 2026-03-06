@@ -15,7 +15,7 @@ WHY IT MATTERS (Business Logic):
     - Loyal, trusted customers (long tenure + autopay) get rewarded with a free install.
     - The tool always returns the SPECIFIC reason for failure -- never a vague "you don't qualify."
       This helps the agent explain clearly, and gives the customer a path to qualify next time.
-    - Called by moves_agent (during Technician Install flows), billing_agent (discount inquiries),
+    - Called by move_cancel_loop (during Technician Install flows), billing_agent (discount inquiries),
       and sales_agent (when a customer asks for a promotion or discount).
 
 INPUTS:

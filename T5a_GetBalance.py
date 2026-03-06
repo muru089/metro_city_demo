@@ -9,7 +9,7 @@ WHY IT MATTERS (Business Logic):
     - Safety first: agents use this to CHECK a balance before deciding whether
       to ask the customer to pay. T5_PayBill is the tool that actually charges --
       these two tools are intentionally separate to prevent accidental charges.
-    - The billing gate in moves_agent calls this first to determine if the
+    - The billing gate in move_cancel_loop calls this first to determine if the
       customer can proceed with a move or cancellation.
     - Used any time the customer asks "what do I owe?" or "is my account paid up?"
 

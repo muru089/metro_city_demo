@@ -17,7 +17,7 @@ WHY IT MATTERS (Business Logic):
       This preserves the full history of the old account for audit purposes.
     - Disconnect date for a Move is set to effective_date - 1 day so there is
       no gap in service and no overlap in billing.
-    - Called exclusively by moves_agent after STATE 1 (billing gate) and
+    - Called exclusively by move_cancel_loop after STATE 1 (billing gate) and
       STATE 3A/3B (move or cancel decision) have both been resolved.
 
 INPUTS:

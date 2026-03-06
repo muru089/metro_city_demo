@@ -8,7 +8,7 @@ WHAT THIS TOOL DOES:
 WHY IT MATTERS (Business Logic):
     - This is the "unlock" tool for moves and cancellations. Customers cannot
       move or cancel service until their balance is $0.00. This tool clears it.
-    - Called by billing_agent during direct payment requests and by moves_agent
+    - Called by billing_agent during direct payment requests and by move_cancel_loop
       when a customer agrees to pay their balance inline during a move flow.
     - Always uses the card on file -- no new card details are ever accepted.
 

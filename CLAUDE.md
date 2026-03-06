@@ -171,20 +171,20 @@ CREATE TABLE customer_accounts (
 **Routing table:**
 | User says...                                              | Route to         |
 |-----------------------------------------------------------|------------------|
-| "moving", "new address", "transfer service", "cancel"     | moves_agent      |
+| "moving", "new address", "transfer service", "cancel"     | move_cancel_loop      |
 | "serviceability", "fiber available", "coverage"           | service_agent    |
 | "upgrade", "downgrade", "change plan", "new customer"     | sales_agent      |
 | "pay bill", "balance", "autopay", "next bill", "invoice"  | billing_agent    |
 | "schedule", "appointment", "reschedule", "reminder"       | scheduling_agent |
 
 **Disambiguation rules:**
-- "Cancel" always routes to moves_agent (cancellation flow)
-- "Change" -- clarify: plan change (sales_agent) vs. address change (moves_agent)
+- "Cancel" always routes to move_cancel_loop (cancellation flow)
+- "Change" -- clarify: plan change (sales_agent) vs. address change (move_cancel_loop)
 - Ambiguous intent: ask one clarifying question; do NOT guess
-- Date/slot follow-ups mid-move (e.g. "March 8 doesn't work") → moves_agent, NOT scheduling_agent
-- Affirmative responses mid-move ("Sure", "Yes", "OK") → moves_agent, NOT billing_agent
-- Fee waiver questions mid-move → moves_agent, NOT sales_agent
-- "Cancel unless fiber available" → moves_agent (multi-intent: moves_agent handles both move and cancel outcomes)
+- Date/slot follow-ups mid-move (e.g. "March 8 doesn't work") → move_cancel_loop, NOT scheduling_agent
+- Affirmative responses mid-move ("Sure", "Yes", "OK") → move_cancel_loop, NOT billing_agent
+- Fee waiver questions mid-move → move_cancel_loop, NOT sales_agent
+- "Cancel unless fiber available" → move_cancel_loop (multi-intent: move_cancel_loop handles both move and cancel outcomes)
 
 ---
 
@@ -251,14 +251,14 @@ CREATE TABLE customer_accounts (
 
 ---
 
-### A5 -- moves_agent (A5_Move_Cancel_Agent.py)
+### A5 -- move_cancel_loop (A5_Move_Cancel_Agent.py)
 
 **Purpose:** Execute service moves to a new address and service cancellations.
 **Tools:** T5a_GetBalance, T5_PayBill, T3_EquipmentLogic, T8_CheckFeeWaiver, T9_BookAppt, T12_ExecuteMoveCancel, T11_SetReminder, T13_SendConfirmationReceipt
 
 **State Machine:** STATE 0 (Init + Resume Detection) → STATE 1 (Billing Gate) → STATE 2 (Address Check) → STATE 3A/3B (Move or Cancel Flow) → STATE 4 (Execute)
 
-**STATE 0 -- Resume Detection:** On every invocation, moves_agent scans conversation history for 4 signals (slots presented, plan offered, fee communicated, fiber confirmed) and jumps directly to the pending step. This prevents re-running the full flow on each ADK re-invocation.
+**STATE 0 -- Resume Detection:** On every invocation, move_cancel_loop scans conversation history for 4 signals (slots presented, plan offered, fee communicated, fiber confirmed) and jumps directly to the pending step. This prevents re-running the full flow on each ADK re-invocation.
 
 **Move Flow (6 steps in order):**
 1. **Balance Gate:** Call T5a_GetBalance. If pending_balance > 0, offer T5_PayBill. Cannot proceed until balance = $0.
@@ -431,7 +431,7 @@ pending_balance must be $0.00 before Move or Cancel proceeds. No exceptions.
 - **DB:** SQLite via `sqlite3`; connection object passed as `conn`
 - **Tool injection:** `functools.partial(tool_fn, conn)` wraps all DB tools before FunctionTool
 - **Tool naming:** T{N}_{PascalCaseName}.py -- file name and function name match
-- **Agent naming:** snake_case Python variable (e.g., service_agent, moves_agent)
+- **Agent naming:** snake_case Python variable (e.g., service_agent, move_cancel_loop)
 - **Each tool file has a `if __name__ == "__main__":` test block** for isolated testing
 - **T13 exception:** Opens its own sqlite3.connect("metro_city.db") -- never wrap with create_db_tool
 - **All tool responses are dicts** with at minimum a "status" key ("success" / "error" / "info")

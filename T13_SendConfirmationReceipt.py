@@ -13,7 +13,7 @@ WHY IT MATTERS (Business Logic):
       the customer something to quote if they call back.
     - Receipt content is action-specific: Move includes new address and fees,
       Cancel includes disconnect date, Payment includes amount paid.
-    - Called at the END of every completed flow in moves_agent and billing_agent.
+    - Called at the END of every completed flow in move_cancel_loop and billing_agent.
 
 SPECIAL NOTE -- NO conn INJECTION:
     Unlike all other tools, T13 opens its own database connection internally.

@@ -11,7 +11,7 @@ WHY IT MATTERS (Business Logic):
     - Proactive customer service: the agent offers this at the end of every
       Move or scheduling flow without waiting for the customer to ask.
     - The 10:00 AM time is fixed per business rules -- no customization needed.
-    - Called by moves_agent (after T9 confirms a date) and scheduling_agent
+    - Called by move_cancel_loop (after T9 confirms a date) and scheduling_agent
       (after T9 books a new appointment).
 
 INPUTS:

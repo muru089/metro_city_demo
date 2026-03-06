@@ -22,19 +22,26 @@ A **multi-agent demo** for a fictional metro city telecom company. Simulates a V
 ## System Architecture
 
 **Framework:** Google ADK (`google.adk.agents.Agent`, `google.adk.tools.FunctionTool`, `google.adk.tools.agent_tool.AgentTool`)
-**LLM:** Gemini 2.5 Flash Lite (all agents)
+**LLM:** `gemini-2.5-flash` for root_agent; `gemini-2.5-flash-lite` for all domain sub-agents
 **Database:** SQLite (`metro_city.db`)
 **DB Injection Pattern:** `functools.partial` used to inject `conn` into all DB tools, hiding it from the agent. Helper: `create_db_tool(fn, conn)` defined in each agent file.
 **Exception:** T13_SendConfirmationReceipt opens its own DB connection internally -- do NOT wrap with `create_db_tool`.
+**Server Launch:** Run `adk web` from `c:\Muru_Workspace` (the PARENT of metro_city_demo), NOT from inside the project folder.
 
 ```
-root_agent  (agent.py)
+root_agent  (agent.py)                               gemini-2.5-flash
   +-- T1_GetUpdateContact  (direct tool)
   +-- service_agent        (A1_Service_Agent.py)    via AgentTool
   +-- sales_agent          (A2_Sales_Agent.py)       via AgentTool
   +-- billing_agent        (A3_Billing_Agent.py)     via AgentTool
   +-- scheduling_agent     (A4_Scheduling_Agent.py)  via AgentTool
   +-- moves_agent          (A5_Move_Cancel_Agent.py) via AgentTool
+
+reflection/                                          (standalone reference implementations)
+  +-- A5_Move_Cancel_LoopAgent.py                   LoopAgent self-reflection pattern
+        +-- MoverDrafter         (LlmAgent, flash-lite, 8 tools)
+        +-- BusinessRulesCritic  (LlmAgent, flash, no tools)
+        +-- RefinerOrExiter      (LlmAgent, flash-lite, no tools)
 ```
 
 ---
@@ -175,6 +182,10 @@ CREATE TABLE customer_accounts (
 - "Cancel" always routes to moves_agent (cancellation flow)
 - "Change" -- clarify: plan change (sales_agent) vs. address change (moves_agent)
 - Ambiguous intent: ask one clarifying question; do NOT guess
+- Date/slot follow-ups mid-move (e.g. "March 8 doesn't work") → moves_agent, NOT scheduling_agent
+- Affirmative responses mid-move ("Sure", "Yes", "OK") → moves_agent, NOT billing_agent
+- Fee waiver questions mid-move → moves_agent, NOT sales_agent
+- "Cancel unless fiber available" → moves_agent (multi-intent: moves_agent handles both move and cancel outcomes)
 
 ---
 
@@ -244,21 +255,26 @@ CREATE TABLE customer_accounts (
 ### A5 -- moves_agent (A5_Move_Cancel_Agent.py)
 
 **Purpose:** Execute service moves to a new address and service cancellations.
-**Tools:** T5a_GetBalance, T3_EquipmentLogic, T12_ExecuteMoveCancel, T11_SetReminder, T13_SendConfirmationReceipt
+**Tools:** T5a_GetBalance, T5_PayBill, T3_EquipmentLogic, T8_CheckFeeWaiver, T9_BookAppt, T12_ExecuteMoveCancel, T11_SetReminder, T13_SendConfirmationReceipt
 
-**Move Flow (5 steps in order):**
-1. **Balance Gate:** Call T5a_GetBalance. If pending_balance > 0, hand off to billing_agent. Cannot proceed until balance = $0.
-2. **Destination Check:** Verify new address is Vacant. Collect destination address_id.
-3. **Equipment Logic:** Call T3_EquipmentLogic to determine self-install vs. tech-install.
-4. **Execute Move:** Call T12_ExecuteMoveCancel with action="MOVE".
-5. **Confirmation + Reminder:** Call T13_SendConfirmationReceipt; offer T11_SetReminder.
+**State Machine:** STATE 0 (Init + Resume Detection) → STATE 1 (Billing Gate) → STATE 2 (Address Check) → STATE 3A/3B (Move or Cancel Flow) → STATE 4 (Execute)
+
+**STATE 0 -- Resume Detection:** On every invocation, moves_agent scans conversation history for 4 signals (slots presented, plan offered, fee communicated, fiber confirmed) and jumps directly to the pending step. This prevents re-running the full flow on each ADK re-invocation.
+
+**Move Flow (6 steps in order):**
+1. **Balance Gate:** Call T5a_GetBalance. If pending_balance > 0, offer T5_PayBill. Cannot proceed until balance = $0.
+2. **Destination Check:** Call T3_EquipmentLogic(street_address). T3 returns tech_type ("Fiber"/"Copper"), install_type, and addr_id. Validates Vacant/Occupied/Not-Found.
+3. **Fee Check:** Call T8_CheckFeeWaiver. Inform customer of $0 (waived) or $99 fee with specific failing reason(s).
+4. **Plan Selection:** Offer "Fiber 1 Gig at $80/mo" as default. Customer may request full plan table. chosen_plan MUST be confirmed before scheduling.
+5. **Appointment:** Call T9_BookAppt() (no date) → present 4 slots. Call T9_BookAppt(date_str) to confirm chosen date.
+6. **Execute + Confirm:** T12_ExecuteMoveCancel(action="MOVE", new_address_id=addr_id_from_T3, new_plan_name=chosen_plan, effective_date=T9_date). Then T13_SendConfirmationReceipt; offer T11_SetReminder.
 
 **Cancel Flow:**
-1. **Redundancy Check:** Verify account is not already CANCELED.
-2. **Balance Gate:** Balance must be $0 first.
-3. **Retention Offer:** Offer plan downgrade or pause (customer may decline).
-4. **Execute Cancel:** Call T12_ExecuteMoveCancel with action="CANCEL".
-5. **Confirmation:** Call T13_SendConfirmationReceipt.
+1. **Balance Gate:** Balance must be $0 first.
+2. **Confirm Intent:** Explicit YES required before proceeding.
+3. **Execute:** T12_ExecuteMoveCancel(action="CANCEL"). Then T13_SendConfirmationReceipt.
+
+**PRE-SEND CHECK (inline self-reflection):** The instruction includes a 6-point critique checklist the agent runs before every response (repetition, multiple asks, variable name exposure, premature tool calls, unauthorized T12, multi-step merging). See reflection/ for the true two-LLM LoopAgent version.
 
 **Address Validation Traps:**
 - **Same-address trap:** New address = current address: "You are already at that address."
@@ -276,7 +292,7 @@ CREATE TABLE customer_accounts (
 |------|-----------------------------------|---------------------------------------------------|--------------------------------------------|
 | T1   | T1_GetUpdateContact.py            | (conn, account_id, new_email=None)                | Read or update customer email/contact      |
 | T2   | T2_FiberCheckServiceability.py    | (conn, address_id)                                | Check max_tech_type + max_speed at addr_id |
-| T3   | T3_EquipmentLogic.py              | (conn, street_address)                            | Self-install vs tech-install (street str)  |
+| T3   | T3_EquipmentLogic.py              | (conn, street_address)                            | DB lookup: Fiber/Copper, Vacant/Occupied, install_type, addr_id (street str input) |
 | T4   | T4_FindMaxSpeedPlan.py            | (conn, address_id)                                | Best plan options for address              |
 | T5   | T5_PayBill.py                     | (conn, account_id, payment_amount=None)           | Process payment (full or partial)          |
 | T5a  | T5a_GetBalance.py                 | (conn, account_id)                                | Read-only balance check                    |
@@ -291,7 +307,19 @@ CREATE TABLE customer_accounts (
 
 **Critical input difference:**
 - T2 takes `address_id` (e.g., "A01")
-- T3 takes a street string (e.g., "100 First St")
+- T3 takes a street string (e.g., "100 First St") and returns `addr_id` in its response
+
+**T3 return dict:**
+```python
+{
+    "status": "success" | "error",
+    "install_type": "Self-Install" | "Technician Install",
+    "tech_type": "Fiber" | "Copper",
+    "addr_id": "A11",          # use this as new_address_id in T12
+    "needs_appointment": True | False,
+    "message": "..."
+}
+```
 
 ---
 
@@ -364,11 +392,40 @@ pending_balance must be $0.00 before Move or Cancel proceeds. No exceptions.
 
 ---
 
+## LoopAgent Self-Reflection Reference (reflection/)
+
+**File:** `reflection/A5_Move_Cancel_LoopAgent.py`
+**Purpose:** Reference implementation of the true two-LLM self-reflection pattern. NOT wired into agent.py — standalone demo for team review.
+
+**Pattern vs. A5 inline check:**
+| Approach | Where | Reliability |
+|---|---|---|
+| Inline PRE-SEND CHECK | A5_Move_Cancel_Agent.py | Same LLM checks its own output — lower reliability |
+| True LoopAgent critique | reflection/A5_Move_Cancel_LoopAgent.py | Separate LLM audits independently — higher reliability |
+
+**Three agents in the loop:**
+| Agent | Model | Tools | Role |
+|---|---|---|---|
+| MoverDrafter | gemini-2.5-flash-lite | All 8 | Generates customer response. No self-check. |
+| BusinessRulesCritic | gemini-2.5-flash | None | Audits 6 business rules. Outputs APPROVED or VIOLATION lines. |
+| RefinerOrExiter | gemini-2.5-flash-lite | None | Passes approved draft unchanged; rewrites only flagged violations. |
+
+**Loop mechanics:**
+- `LoopAgent(max_iterations=2)` is the circuit breaker — guarantees response even if violations persist
+- Exit via `event.actions.escalate` (ADK native) — no `exit_loop` tool (that is a LangGraph pattern)
+- State shared via conversation history (`include_contents='default'`) — no TypedDict (also LangGraph)
+
+**Business rules audited (6):** Balance Gate, Explicit Consent, Fee Waiver Integrity, Address Check Before Order, Plan Confirmed Before Scheduling, No Internal Variable Exposure
+
+**Import path:** `from metro_city_demo.reflection.A5_Move_Cancel_LoopAgent import move_cancel_loop`
+
+---
+
 ## Coding Conventions
 
 - **Language:** Python 3
 - **Framework:** Google ADK (`google.adk.agents`, `google.adk.tools`)
-- **LLM:** `gemini-2.5-flash-lite` (set in each agent model= parameter)
+- **LLM:** `gemini-2.5-flash` for root_agent; `gemini-2.5-flash-lite` for all domain agents
 - **DB:** SQLite via `sqlite3`; connection object passed as `conn`
 - **Tool injection:** `functools.partial(tool_fn, conn)` wraps all DB tools before FunctionTool
 - **Tool naming:** T{N}_{PascalCaseName}.py -- file name and function name match
@@ -376,6 +433,8 @@ pending_balance must be $0.00 before Move or Cancel proceeds. No exceptions.
 - **Each tool file has a `if __name__ == "__main__":` test block** for isolated testing
 - **T13 exception:** Opens its own sqlite3.connect("metro_city.db") -- never wrap with create_db_tool
 - **All tool responses are dicts** with at minimum a "status" key ("success" / "error" / "info")
+- **Server launch:** `cd c:\Muru_Workspace && adk web` — must run from PARENT directory, not from inside metro_city_demo/
+- **Subfolders:** `reflection/` contains standalone pattern reference implementations with relative imports (`from ..ToolName import ToolName`)
 
 ---
 

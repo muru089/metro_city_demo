@@ -1,17 +1,22 @@
 graph TD
-    U["UBER AGENT (root_agent)<br>Auth · Intent · Route"]
+
+    %% ============================================================
+    %% DIAGRAM 1: Main Multi-Agent Architecture
+    %% ============================================================
+
+    U["UBER AGENT — root_agent<br>gemini-2.5-flash<br>Auth · Intent · Route"]
 
     U --> T1["T1: Get/Update Contact<br>(Direct Tool — on Uber Agent)"]
 
-    U --> SVC["SERVICEABILITY AGENT<br>Coverage & Tech Check"]
-    U --> SA["SALES AGENT<br>Plans & Upgrades"]
-    U --> B["BILLING AGENT<br>Payments & Waivers"]
-    U --> SCH["SCHEDULING AGENT<br>Appointments"]
-    U --> M["MOVES & LIFECYCLE AGENT<br>(Squad Agent)<br>Moves · Transfers · Cancels"]
+    U --> SVC["SERVICEABILITY AGENT<br>A1 · flash-lite<br>Coverage & Tech Check"]
+    U --> SA["SALES AGENT<br>A2 · flash-lite<br>Plans & Upgrades"]
+    U --> B["BILLING AGENT<br>A3 · flash-lite<br>Payments & Waivers"]
+    U --> SCH["SCHEDULING AGENT<br>A4 · flash-lite<br>Appointments"]
+    U --> M["MOVES & LIFECYCLE AGENT<br>A5 · flash-lite · Squad Agent<br>Moves · Transfers · Cancels"]
 
-    SVC --> T2a["T2: Fiber Check"]
+    SVC --> T2a["T2: Fiber Check Serviceability"]
 
-    SA --> T2b["T2: Fiber Check"]
+    SA --> T2b["T2: Fiber Check Serviceability"]
     SA --> T4["T4: Max Speed Plan"]
     SA --> T8a["T8: Check Fee Waiver"]
 
@@ -28,14 +33,54 @@ graph TD
 
     M --> T5a2["T5a: Get Balance"]
     M --> T5c["T5: Pay Bill ★"]
-    M --> T3["T3: Equipment Check"]
+    M --> T3["T3: Equipment Logic ★<br>DB lookup: Fiber/Copper<br>Vacant/Occupied · addr_id"]
     M --> T8c["T8: Check Fee Waiver ★"]
     M --> T9b["T9: Book Appt ★"]
     M --> T11b["T11: Set Reminder"]
     M --> T13b["T13: Send Receipt"]
-    M --> T12["T12: Exec Move/Cancel"]
+    M --> T12["T12: Exec Move/Cancel<br>needs addr_id + plan_name + date"]
 
+    style U fill:#cfe2ff
     style M fill:#ffd966
     style T5c fill:#d9ead3
     style T8c fill:#d9ead3
     style T9b fill:#d9ead3
+    style T3 fill:#d9ead3
+
+    %% ============================================================
+    %% DIAGRAM 2: LoopAgent Self-Reflection Pattern
+    %% reflection/A5_Move_Cancel_LoopAgent.py  (standalone reference)
+    %% ============================================================
+
+    subgraph LOOP["reflection/ — LoopAgent Self-Reflection  (Standalone Reference Implementation)"]
+        direction TB
+
+        LC_IN["Customer Message"] --> MD
+
+        MD["① MoverDrafter<br>flash-lite · 8 tools<br>Generates customer response<br>No self-check"]
+        MD --> BRC["② BusinessRulesCritic<br>flash · no tools · independent LLM<br>Audits 6 business rules<br>Outputs: APPROVED or VIOLATION lines"]
+        BRC --> ROE["③ RefinerOrExiter<br>flash-lite · no tools<br>APPROVED → pass draft unchanged<br>VIOLATION → rewrite flagged parts only"]
+
+        ROE -->|"VIOLATION found<br>loop back (max 2 iterations)"| MD
+        ROE -->|"APPROVED or<br>max_iterations=2 reached"| LC_OUT["Final Response → Customer"]
+    end
+
+    subgraph RULES["6 Business Rules Audited by BusinessRulesCritic"]
+        direction LR
+        R1["Rule 1<br>Balance Gate"]
+        R2["Rule 2<br>Explicit Consent<br>before payment"]
+        R3["Rule 3<br>Fee Waiver<br>Integrity"]
+        R4["Rule 4<br>Address Check<br>before T12"]
+        R5["Rule 5<br>Plan confirmed<br>before scheduling"]
+        R6["Rule 6<br>No internal<br>variable exposure"]
+    end
+
+    BRC -.->|"checks"| RULES
+
+    style MD fill:#fff2cc
+    style BRC fill:#d9ead3
+    style ROE fill:#fff2cc
+    style LC_IN fill:#e8eaf6
+    style LC_OUT fill:#e8eaf6
+    style LOOP fill:#f8f9fa
+    style RULES fill:#f8f9fa

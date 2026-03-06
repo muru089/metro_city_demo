@@ -359,12 +359,18 @@ READ THE T3 RESULT:
 
           [blank line]
 
-          MESSAGE 3 — Scheduling ask only (short, 1-2 sentences):
-              "What date works best for you? Morning slots run 8:00 AM to 12:00 PM,
-               and afternoon slots run 1:00 PM to 5:00 PM."
+          MESSAGE 3 — Call T9_BookAppt() with NO date argument NOW, then present the slots:
+              Call T9_BookAppt() immediately as part of composing MESSAGE 3.
+              T9 returns 4 slots. Present them:
+                  "Here are the next available appointment slots:
+                   - [slot 1 from T9, exact text]
+                   - [slot 2 from T9, exact text]
+                   - [slot 3 from T9, exact text]
+                   - [slot 4 from T9, exact text]
+                   Which works best for you?"
 
           STOP YOUR RESPONSE HERE after MESSAGE 3.
-          Wait for the customer to respond. Do NOT call T9_BookAppt yet. Do NOT pick a date.
+          Wait for the customer to choose. Do NOT call T9_BookAppt again in this response.
 
       IMPORTANT -- Clarifying questions (answer directly, no tool call needed):
           If the customer asks what AM or PM means, or what the time window is:
@@ -385,32 +391,22 @@ READ THE T3 RESULT:
               Do NOT call T8 again. The result is already known.
 
       Step B -- When the customer responds about scheduling:
-          If the customer says they are flexible OR does not give a specific date:
-              Call T9_BookAppt() with NO date argument.
-              T9 returns slots already formatted with exact time ranges (e.g., "2026-03-08 (8:00 AM - 12:00 PM)").
-              Present all 4 slots clearly, one per line:
-                  "Here are the next available appointments:
-                   - March 8 — Morning (8:00 AM to 12:00 PM)
-                   - March 8 — Afternoon (1:00 PM to 5:00 PM)
-                   - March 9 — Morning (8:00 AM to 12:00 PM)
-                   - March 9 — Afternoon (1:00 PM to 5:00 PM)
-                   Which works best for you?"
-              STOP YOUR RESPONSE HERE. Wait for the customer to pick a slot.
-              Do NOT call T9_BookAppt again in this response.
-
-          If the customer names a specific date AND slot (e.g., "March 10 morning"):
+          If the customer picks one of the slots already shown (e.g., "March 8 morning"):
               Call T9_BookAppt(date_str="YYYY-MM-DD") to confirm that date.
               If confirmed: Say "Perfect — your appointment is set for [date], morning (8:00 AM to 12:00 PM)."
                             or   "Perfect — your appointment is set for [date], afternoon (1:00 PM to 5:00 PM)."
+              STOP YOUR RESPONSE HERE. Wait for the customer's acknowledgment.
+
+          If the customer names a date that is NOT one of the slots already shown:
+              Call T9_BookAppt(date_str="YYYY-MM-DD") to try it.
               If T9 returns an error:
-                  - If the date is IN THE PAST: "That date has already passed — please choose a future date."
+                  - If the date is IN THE PAST:
+                      "That date has already passed. Please choose from the slots I listed above."
+                      STOP. Do NOT call T9 again.
                   - If the date is BEYOND 30 DAYS:
-                      Say: "I can only book up to 30 days out — that date is outside our booking window."
-                      Then IMMEDIATELY call T9_BookAppt() with NO date argument to retrieve the real slots.
-                      Present ONLY the dates/times returned by that tool call.
-                      *** CRITICAL: Do NOT calculate, guess, or invent any dates yourself.
-                          Do NOT write any date in your response before seeing the T9_BookAppt() tool result.
-                          The slot dates in your message MUST come word-for-word from the tool response. ***
+                      "I can only book up to 30 days out — that date is outside our booking window.
+                       Please choose from the slots I listed above."
+                      STOP. Do NOT call T9 again. Do NOT generate or list any new dates.
                   - Do NOT say a future date "has passed." Only use past-tense for dates before today.
               STOP YOUR RESPONSE HERE. Wait for the customer's acknowledgment.
 

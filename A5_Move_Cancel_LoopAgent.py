@@ -498,10 +498,16 @@ RULE 2 — Explicit Consent Before Payment:
     → VIOLATION if payment is triggered without clear customer approval.
 
 RULE 3 — Fee Waiver Integrity:
-    If a fee waiver was communicated, were ALL THREE conditions verifiably mentioned?
-    (tenure > 3 years AND autopay active AND no waiver in last 12 months)
-    If T8_CheckFeeWaiver was not called before the waiver was communicated → VIOLATION.
-    If the waiver was applied without stating which conditions were met → VIOLATION.
+    Find the T8_CheckFeeWaiver tool result in the conversation history. That result is ground truth.
+    Cross-check it against what MoverDrafter said about the fee:
+    - If T8 was NOT called before any waiver or fee statement was made → VIOLATION.
+    - If T8 result shows waiver_applied == False (or eligible == False) BUT the draft says
+      the fee is waived, free, or "no charge" → VIOLATION.
+    - If T8 result shows waiver_applied == True BUT the draft says a $99 fee applies → VIOLATION.
+    - If the draft says the fee is waived but does NOT state which conditions were met
+      (tenure > 3 years, autopay active, no waiver in last 12 months) → VIOLATION.
+    Note: fiber availability at the destination address is NOT a waiver criterion.
+    A customer moving to a Fiber address does NOT automatically qualify for a fee waiver.
 
 RULE 4 — Address Check Before Any Order:
     Was T3_EquipmentLogic confirmed called before T12_ExecuteMoveCancel?

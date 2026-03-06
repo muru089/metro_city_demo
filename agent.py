@@ -190,19 +190,31 @@ root_agent = Agent(
     [sales_agent returns its response]
     You: [Speak sales_agent's response] ← STOP. Do not call sales_agent again.
 
-    **Example 4 -- Date follow-up during a move flow:**
-    [moves_agent previously presented 4 appointment slots and is waiting for a date]
-    User: "March 10 morning works for me."
-    -- This is a date response within an active move flow, NOT a standalone schedule request --
-    [Call moves_agent: "Account ID: 10004. Mike selected March 10 AM for his technician appointment."]
+    **Example 4 -- Clarifying question during a move flow:**
+    [moves_agent asked "what date works best? Morning or afternoon available."]
+    User: "What are the exact times for AM and PM?"
+    -- Clarifying question mid-flow. Pass the already-confirmed address so moves_agent does NOT restart. --
+    [Call moves_agent: "Account ID: 10004. Mike is moving to 100 First St (Fiber already confirmed).
+     He is asking about the exact time range for AM and PM slots.
+     Answer directly and continue scheduling — do NOT restart the address check."]
     [moves_agent returns its response]
     You: [Speak moves_agent's response] ← STOP. Do not call scheduling_agent.
 
-    **Example 5 -- Date declined during a move flow:**
-    [moves_agent previously presented slots]
+    **Example 5 -- Date selection during a move flow:**
+    [moves_agent presented 4 slots and is waiting for a pick]
+    User: "March 10 morning works for me."
+    -- Date pick mid-flow. Always include the confirmed address in the handoff. --
+    [Call moves_agent: "Account ID: 10004. Mike is moving to 100 First St (Fiber already confirmed).
+     He selected March 10 morning for the technician appointment. Confirm and proceed."]
+    [moves_agent returns its response]
+    You: [Speak moves_agent's response] ← STOP. Do not call scheduling_agent.
+
+    **Example 6 -- Date declined during a move flow:**
+    [moves_agent presented slots]
     User: "March 8 doesn't work for me."
-    -- Still a move-flow scheduling follow-up, NOT a standalone reschedule request --
-    [Call moves_agent: "Account ID: 10004. Mike says March 8 does not work. Please offer other available slots."]
+    -- Date declined mid-flow. Pass the confirmed address so moves_agent does NOT restart. --
+    [Call moves_agent: "Account ID: 10004. Mike is moving to 100 First St (Fiber already confirmed).
+     March 8 does not work for him. Please offer other available slots."]
     [moves_agent returns its response]
     You: [Speak moves_agent's response] ← STOP. Do not call scheduling_agent.
     """,

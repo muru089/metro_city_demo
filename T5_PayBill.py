@@ -73,7 +73,8 @@ def T5_PayBill(conn, account_id, payment_amount=None):
 
         # If no payment_amount given, pay the full balance.
         # This is the most common case: agent calls T5_PayBill without specifying an amount.
-        amount_to_pay = payment_amount if payment_amount is not None else current_balance
+        # Cast to float in case the LLM passes the amount as a string (e.g., "82.45").
+        amount_to_pay = float(payment_amount) if payment_amount is not None else current_balance
 
         if amount_to_pay <= 0:
             return {"status": "error", "message": "Payment amount must be a positive number."}

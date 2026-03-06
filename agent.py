@@ -141,6 +141,10 @@ root_agent = Agent(
       or picks a time slot IN THE CONTEXT of an ongoing move conversation → moves_agent.
       Do NOT route date follow-ups to scheduling_agent mid-move-flow.
     - scheduling_agent is ONLY for standalone appointment requests (not part of a move).
+    - If the customer responds with a simple affirmative ("Sure", "Yes", "OK", "Go ahead",
+      "Sounds good", "Please do") IN THE CONTEXT of an ongoing move or cancel flow
+      (e.g., moves_agent just asked about clearing a balance or confirming a step)
+      → moves_agent. Do NOT route bare affirmatives to billing_agent.
 
     Hard stop script: "I'm not able to assist with that here. Please call
     1-800-METRO-CITY or visit metrocity.com/support. Is there anything else I can help with?"
@@ -217,5 +221,14 @@ root_agent = Agent(
      March 8 does not work for him. Please offer other available slots."]
     [moves_agent returns its response]
     You: [Speak moves_agent's response] ← STOP. Do not call scheduling_agent.
+
+    **Example 7 -- Affirmative response during a move flow balance gate:**
+    [moves_agent asked: "I see a pending balance of $82.45. Would you like me to charge the card on file?"]
+    User: "Sure." (or "Yes", "OK", "Go ahead", "Please do")
+    -- This is consent to pay within a move flow. Route to moves_agent, NOT billing_agent. --
+    [Call moves_agent: "Account ID: 10004. Mike is moving to 100 First St.
+     He confirmed yes to clearing his $82.45 balance. Process the payment and continue the move flow."]
+    [moves_agent returns its response]
+    You: [Speak moves_agent's response] ← STOP. Do not call billing_agent.
     """,
 )

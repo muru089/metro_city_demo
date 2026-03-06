@@ -1,0 +1,41 @@
+graph TD
+    U["UBER AGENT (root_agent)<br>Auth · Intent · Route"]
+
+    U --> T1["T1: Get/Update Contact<br>(Direct Tool — on Uber Agent)"]
+
+    U --> SVC["SERVICEABILITY AGENT<br>Coverage & Tech Check"]
+    U --> SA["SALES AGENT<br>Plans & Upgrades"]
+    U --> B["BILLING AGENT<br>Payments & Waivers"]
+    U --> SCH["SCHEDULING AGENT<br>Appointments"]
+    U --> M["MOVES & LIFECYCLE AGENT<br>(Squad Agent)<br>Moves · Transfers · Cancels"]
+
+    SVC --> T2a["T2: Fiber Check"]
+
+    SA --> T2b["T2: Fiber Check"]
+    SA --> T4["T4: Max Speed Plan"]
+    SA --> T8a["T8: Check Fee Waiver"]
+
+    B --> T5b["T5: Pay Bill"]
+    B --> T5a["T5a: Get Balance"]
+    B --> T6["T6: Autopay Toggle"]
+    B --> T7["T7: Calc Next Bill"]
+    B --> T8b["T8: Check Fee Waiver"]
+    B --> T13a["T13: Send Receipt"]
+
+    SCH --> T9a["T9: Book Appt"]
+    SCH --> T10["T10: Resched Appt"]
+    SCH --> T11a["T11: Set Reminder"]
+
+    M --> T5a2["T5a: Get Balance"]
+    M --> T5c["T5: Pay Bill ★"]
+    M --> T3["T3: Equipment Check"]
+    M --> T8c["T8: Check Fee Waiver ★"]
+    M --> T9b["T9: Book Appt ★"]
+    M --> T11b["T11: Set Reminder"]
+    M --> T13b["T13: Send Receipt"]
+    M --> T12["T12: Exec Move/Cancel"]
+
+    style M fill:#ffd966
+    style T5c fill:#d9ead3
+    style T8c fill:#d9ead3
+    style T9b fill:#d9ead3

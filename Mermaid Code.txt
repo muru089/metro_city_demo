@@ -1,12 +1,6 @@
 graph TD
 
     %% ============================================================
-    %% https://mermaid.live/edit#pako:eNq1V81u20YQfpUBiwQJatkmJdES0QSQKNkRIFmGflykVSGsyKVElOIyy2VqNwnQS3tv0UOPbV-i9z6Kn6QzS1GmZCso0JQnUfPNN_87y3eGJ3xuOMZSsmQFk84snsWAz5Mn8OI_PFuSTq91MWoNwHRgwMIYBlmkwkpryWMFLemtQsU9lUn-iazmNNOvZ8a03R1B66J7OYG7H34FKYSaMzL7xUK-XPJ1GIcV67heCSKWrui_VqZW8Pdf0IsVOYe_RiJTfGZ8s6WFSuUlTExkn2A8F1ydTBOfKQ6uiBXzNPWzTigxJJgIEWnLIobpgkvQMT9_QDe-dpFv3B1d99xuq93r9yavc7-1UyY5on2sRJgr-s8Vb7nEUOApTLi3AnfFvW81b4m1RaStfndc4rIecl1FLE6RaJpgA_g83aNpIwu61O9dXpR4qo_wsNs1hkdUX7IQ_dtnGruvyCP3Vbcz3aOrPaRrJYkIY6Up94gGSDMYXmNgT6HfO--6r91-t8RW32Wjt_GbjPl5_gkywPyl9P9EYvAB-kovLos9HqWl-mBl8oJbjCpuOXAeUiF1vmHM5dvQ42wRopnbslpro7X4d1plnRqp1GhUbmCccO4DFegBrKEdajgb0nPON1kvudHOoXXtRd0BrBC0wyjakhUAzVVnup-hzSLKwz7IJoztAM6ISJBoIpbL6AHqjFBn6BWLPLjkN-pRg43Fx5wvAc2qds2sOpi22IcR93iYqHKq3Vc5tKmRTQfaQnwL2D3qPmcFxjzVbKcOEqXeCnN7AGfmZk0yqxCMR4W_k9pBkTnrY6krUN5eAeDutx_3QVXCYJzdN1mYUNdDXyxDj6DUsZ02RBhYlmya6cQVScIlia6Zx2J1MvS8LAkxJuxk5vtyHvr7Nhregbw_5lBzsZ_Qx1CmuTiYqjKsujhYyDJMp9PEienecA9oTE_yqaRAY5yGtIgNPocEsz2P2ZrjbzqDS_VJ1W3E8bgIMNvOZ17ArSAoSwYbSRD4TdsuS7BaG5nf5Myv7sgaH5E1F4dl1T3R_7NgMW19IZJ8s455FFRGPIhwE4W4gK6YUlzeW5Zb0UmrPqdMz_NMz7ccx8ktwLNUsdhnkYg56XDJEfT8k-7qNFvkd4_-cHiFDVByTa_Pw0HBs_G9d6PCO-itk4jTDDFCPd92GT2-3s2kPGkXDtDTd-e9SzTuZqkSaxyJAU9TXLGonC-dThk96CD07uffdYvKjmSByodxd-00QOEdICXBBY9xZStcO15hQfI0EXGq192lgJSC83Y2eW4q38MjV5v8A9pZGsbo3CiLeOrKUIXe1jIZjUVulX7TMCY4cPo86Q_yS44f4pa2YbHhAUlEJBpmKslUiof81dUIF2wHhITr3rDfmvSGlxARfMc3dEo7Nxp2tXN_UhEQJYeyexM-mpLCO-1KYebup18gYeiKT5mELPZWLF5yXx9vW_uEkvw7SUxIukQAakkMRsRRef_Sgy6Ra-9nxj1BILJYc-JRmsCC4Rn4bI171gLyVTdLit3yXhf7IVEpK0SCmvN7vRcW-sZoqRABdtNwOsGcnIcxi2jd6ErrEIoO22YS6_NgFEZTvLihvr0tN-h6gy4fBr64fawRDrR6f1SKhy6vpAImRbHZWXBRHKBbnFXgLMJ1b5Io9EJFF910c41a8EBIjjXQN79d7WqhXSXk_aqhN7pfL2X59qNVaoVKTTcHnvMUtt5VJWu4HnbV6oVavbjOgifiIJTrvIE2enrhZ9jDy111u1C3N3OIt048KJleOW-ZDNkChfwmESl9pDxSND0Fx7pF9Pim1AG6gLvrCCe52DqB5XllEVEc2h7UgIf09Km1kfIGZ4G9J8UuPCzG47ZgbgTNgO1YJf_3pMYRfiSGvuEomfEjA3t4zejVeEeaM0Ot8NSdGQ7-9HnA8DtvZsziD6iWsPgrIdaFphTZcmU4AYtSfMv0F1QnZNj69xA6taSLE6sMx7Sbp5rEcN4ZN4ZTsayzY7th1Wy7Wq2ZjUbDPjJuCWceN61a7fSs2ag2Ty278eHI-F4bNo8tu1qrm2enZsOuWafmkcFxkoQc5F-_-iP4wz-YBqrN
-    %% ============================================================
-
-
-
-    %% ============================================================
     %% DIAGRAM 1: Main Multi-Agent Architecture
     %% ============================================================
 

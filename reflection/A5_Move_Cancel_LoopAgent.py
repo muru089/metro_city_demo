@@ -15,9 +15,9 @@ PRE-SEND CHECK. This file uses TWO separate LLM models in a loop:
   - BusinessRulesCritic (gemini-2.5-flash)    -- independently audits it
   - RefinerOrExiter   (gemini-2.5-flash-lite) -- fixes violations or passes
 
-STATUS: Standalone reference implementation.
-        NOT wired into agent.py / the demo supervisor yet.
-        Demonstrates the pattern for team review and future integration.
+STATUS: LIVE — wired into agent.py as AgentTool(move_cancel_loop).
+        Replaces the single-agent moves_agent (A5_Move_Cancel_Agent.py) in the demo.
+        A5_Move_Cancel_Agent.py is retained as a reference for the inline PRE-SEND CHECK pattern.
 
 HOW ADK LoopAgent WORKS:
     LoopAgent cycles through its sub_agents sequentially in each iteration.

@@ -14,7 +14,7 @@ ARCHITECTURE OVERVIEW:
       |-- sales_agent          (Domain Agent: plans, upgrades, new service)
       |-- billing_agent        (Domain Agent: payments, autopay, balance)
       |-- scheduling_agent     (Domain Agent: book/reschedule appointments)
-      |-- moves_agent          (Squad Agent : multi-step move + cancel flows)
+      |-- move_cancel_loop     (LoopAgent   : move + cancel with compliance critic)
 
 WHY A 2-TIER ARCHITECTURE:
     - The Uber Agent handles auth once, centrally. No sub-agent ever re-prompts
@@ -47,7 +47,7 @@ from .A1_Service_Agent    import service_agent
 from .A2_Sales_Agent      import sales_agent
 from .A3_Billing_Agent    import billing_agent
 from .A4_Scheduling_Agent import scheduling_agent
-from .A5_Move_Cancel_Agent import moves_agent
+from .reflection.A5_Move_Cancel_LoopAgent import move_cancel_loop
 
 # =============================================================================
 # IMPORT AND WIRE T1 -- THE AUTHENTICATION TOOL
@@ -84,7 +84,7 @@ root_agent = Agent(
         AgentTool(sales_agent),      # Domain: plans and upgrades
         AgentTool(billing_agent),    # Domain: payments and autopay
         AgentTool(scheduling_agent), # Domain: appointments and reminders
-        AgentTool(moves_agent),      # Squad:  move and cancel flows
+        AgentTool(move_cancel_loop), # LoopAgent: move + cancel with BusinessRulesCritic
     ],
 
     instruction="""
@@ -119,8 +119,8 @@ root_agent = Agent(
 
     | Customer intent                                          | Sub-agent to call   |
     | :------------------------------------------------------- | :------------------ |
-    | Move, new address, transfer, "cancel unless..."          | moves_agent         |
-    | Cancel service or stop service                           | moves_agent         |
+    | Move, new address, transfer, "cancel unless..."          | move_cancel_loop    |
+    | Cancel service or stop service                           | move_cancel_loop    |
     | Fiber check, coverage, speed at an address               | service_agent       |
     | Upgrade, downgrade, change plan, pricing, new sign-up    | sales_agent         |
     | Pay bill, check balance, autopay, next bill              | billing_agent       |

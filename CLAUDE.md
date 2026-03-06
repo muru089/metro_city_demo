@@ -35,13 +35,12 @@ root_agent  (agent.py)                               gemini-2.5-flash
   +-- sales_agent          (A2_Sales_Agent.py)       via AgentTool
   +-- billing_agent        (A3_Billing_Agent.py)     via AgentTool
   +-- scheduling_agent     (A4_Scheduling_Agent.py)  via AgentTool
-  +-- moves_agent          (A5_Move_Cancel_Agent.py) via AgentTool
-
-reflection/                                          (standalone reference implementations)
-  +-- A5_Move_Cancel_LoopAgent.py                   LoopAgent self-reflection pattern
+  +-- move_cancel_loop     (reflection/A5_Move_Cancel_LoopAgent.py) via AgentTool ← LIVE
         +-- MoverDrafter         (LlmAgent, flash-lite, 8 tools)
         +-- BusinessRulesCritic  (LlmAgent, flash, no tools)
         +-- RefinerOrExiter      (LlmAgent, flash-lite, no tools)
+
+A5_Move_Cancel_Agent.py                              (retained — inline PRE-SEND CHECK reference)
 ```
 
 ---
@@ -397,11 +396,14 @@ pending_balance must be $0.00 before Move or Cancel proceeds. No exceptions.
 **File:** `reflection/A5_Move_Cancel_LoopAgent.py`
 **Purpose:** Reference implementation of the true two-LLM self-reflection pattern. NOT wired into agent.py — standalone demo for team review.
 
+**Status:** LIVE — `move_cancel_loop` is wired into `agent.py` and handles all move/cancel flows.
+`A5_Move_Cancel_Agent.py` is retained as a reference for the inline PRE-SEND CHECK pattern.
+
 **Pattern vs. A5 inline check:**
-| Approach | Where | Reliability |
-|---|---|---|
-| Inline PRE-SEND CHECK | A5_Move_Cancel_Agent.py | Same LLM checks its own output — lower reliability |
-| True LoopAgent critique | reflection/A5_Move_Cancel_LoopAgent.py | Separate LLM audits independently — higher reliability |
+| Approach | Where | Status | Reliability |
+|---|---|---|---|
+| Inline PRE-SEND CHECK | A5_Move_Cancel_Agent.py | Reference only | Same LLM checks its own output — lower |
+| True LoopAgent critique | reflection/A5_Move_Cancel_LoopAgent.py | **LIVE in demo** | Separate LLM audits independently — higher |
 
 **Three agents in the loop:**
 | Agent | Model | Tools | Role |

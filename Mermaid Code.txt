@@ -12,7 +12,7 @@ graph TD
     U --> SA["SALES AGENT<br>A2 · flash-lite<br>Plans & Upgrades"]
     U --> B["BILLING AGENT<br>A3 · flash-lite<br>Payments & Waivers"]
     U --> SCH["SCHEDULING AGENT<br>A4 · flash-lite<br>Appointments"]
-    U --> M["MOVES & LIFECYCLE AGENT<br>A5 · flash-lite · Squad Agent<br>Moves · Transfers · Cancels"]
+    U --> M["MOVES & LIFECYCLE AGENT<br>A5 · LoopAgent · LIVE<br>MoverDrafter → Critic → Refiner"]
 
     SVC --> T2a["T2: Fiber Check Serviceability"]
 
@@ -49,10 +49,10 @@ graph TD
 
     %% ============================================================
     %% DIAGRAM 2: LoopAgent Self-Reflection Pattern
-    %% reflection/A5_Move_Cancel_LoopAgent.py  (standalone reference)
+    %% A5_Move_Cancel_LoopAgent.py  (LIVE — wired into agent.py)
     %% ============================================================
 
-    subgraph LOOP["reflection/ — LoopAgent Self-Reflection  (Standalone Reference Implementation)"]
+    subgraph LOOP["A5_Move_Cancel_LoopAgent.py — LoopAgent Self-Reflection  (LIVE in Demo)"]
         direction TB
 
         LC_IN["Customer Message"] --> MD

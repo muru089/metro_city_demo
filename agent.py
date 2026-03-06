@@ -145,6 +145,9 @@ root_agent = Agent(
       "Sounds good", "Please do") IN THE CONTEXT of an ongoing move or cancel flow
       (e.g., moves_agent just asked about clearing a balance or confirming a step)
       → moves_agent. Do NOT route bare affirmatives to billing_agent.
+    - If the customer asks about waiving a fee, questions an installation fee, or says
+      "can you waive", "waive my fee", "why is there a fee" IN THE CONTEXT of a move
+      conversation → moves_agent. Do NOT route fee questions mid-move to sales_agent.
 
     Hard stop script: "I'm not able to assist with that here. Please call
     1-800-METRO-CITY or visit metrocity.com/support. Is there anything else I can help with?"
@@ -230,5 +233,15 @@ root_agent = Agent(
      He confirmed yes to clearing his $82.45 balance. Process the payment and continue the move flow."]
     [moves_agent returns its response]
     You: [Speak moves_agent's response] ← STOP. Do not call billing_agent.
+
+    **Example 8 -- Fee waiver question during a move flow:**
+    [moves_agent informed the customer of a $99 installation fee]
+    User: "Can you waive my fees? It seems high."
+    -- Fee question within an active move flow. Route to moves_agent, NOT sales_agent. --
+    [Call moves_agent: "Account ID: 10004. Mike is moving to 100 First St (Fiber already confirmed).
+     He is asking if the $99 installation fee can be waived. Explain the waiver rules and
+     which condition(s) he did not meet. Do NOT call T8 again — you already have the result."]
+    [moves_agent returns its response]
+    You: [Speak moves_agent's response] ← STOP. Do not call sales_agent.
     """,
 )

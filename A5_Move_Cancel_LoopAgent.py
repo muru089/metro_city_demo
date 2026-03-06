@@ -50,23 +50,23 @@ from google.adk.tools import FunctionTool
 
 # =============================================================================
 # IMPORTS -- Same 8 tools as A5_Move_Cancel_Agent.py
-# Two dots (..) = go up one level to metro_city_demo/ where tools live.
+# Single dot (.) = same level as metro_city_demo/ tools.
 # =============================================================================
-from ..T5a_GetBalance import T5a_GetBalance
-from ..T5_PayBill import T5_PayBill
-from ..T3_EquipmentLogic import T3_EquipmentLogic
-from ..T8_CheckFeeWaiver import T8_CheckFeeWaiver
-from ..T9_BookAppt import T9_BookAppt
-from ..T12_ExecuteMoveCancel import T12_ExecuteMoveCancel
-from ..T11_SetReminder import T11_SetReminder
-from ..T13_SendConfirmationReceipt import T13_SendConfirmationReceipt
+from .T5a_GetBalance import T5a_GetBalance
+from .T5_PayBill import T5_PayBill
+from .T3_EquipmentLogic import T3_EquipmentLogic
+from .T8_CheckFeeWaiver import T8_CheckFeeWaiver
+from .T9_BookAppt import T9_BookAppt
+from .T12_ExecuteMoveCancel import T12_ExecuteMoveCancel
+from .T11_SetReminder import T11_SetReminder
+from .T13_SendConfirmationReceipt import T13_SendConfirmationReceipt
 
 
 # =============================================================================
 # DATABASE CONNECTION
-# One level up from this file (reflection/) to reach metro_city_demo/
+# Same directory as this file (metro_city_demo/).
 # =============================================================================
-DB_PATH = os.path.join(os.path.dirname(__file__), '../metro_city.db')
+DB_PATH = os.path.join(os.path.dirname(__file__), 'metro_city.db')
 conn = sqlite3.connect(DB_PATH, check_same_thread=False)
 
 

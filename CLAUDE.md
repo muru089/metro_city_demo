@@ -35,12 +35,12 @@ root_agent  (agent.py)                               gemini-2.5-flash
   +-- sales_agent          (A2_Sales_Agent.py)       via AgentTool
   +-- billing_agent        (A3_Billing_Agent.py)     via AgentTool
   +-- scheduling_agent     (A4_Scheduling_Agent.py)  via AgentTool
-  +-- move_cancel_loop     (reflection/A5_Move_Cancel_LoopAgent.py) via AgentTool ← LIVE
+  +-- move_cancel_loop     (A5_Move_Cancel_LoopAgent.py) via AgentTool ← LIVE
         +-- MoverDrafter         (LlmAgent, flash-lite, 8 tools)
         +-- BusinessRulesCritic  (LlmAgent, flash, no tools)
         +-- RefinerOrExiter      (LlmAgent, flash-lite, no tools)
 
-A5_Move_Cancel_Agent.py                              (retained — inline PRE-SEND CHECK reference)
+Archive/A5_Move_Cancel_Agent.py                      (archived — inline PRE-SEND CHECK reference)
 ```
 
 ---
@@ -419,7 +419,7 @@ pending_balance must be $0.00 before Move or Cancel proceeds. No exceptions.
 
 **Business rules audited (6):** Balance Gate, Explicit Consent, Fee Waiver Integrity, Address Check Before Order, Plan Confirmed Before Scheduling, No Internal Variable Exposure
 
-**Import path:** `from metro_city_demo.reflection.A5_Move_Cancel_LoopAgent import move_cancel_loop`
+**Import path:** `from metro_city_demo.A5_Move_Cancel_LoopAgent import move_cancel_loop`
 
 ---
 
@@ -436,7 +436,8 @@ pending_balance must be $0.00 before Move or Cancel proceeds. No exceptions.
 - **T13 exception:** Opens its own sqlite3.connect("metro_city.db") -- never wrap with create_db_tool
 - **All tool responses are dicts** with at minimum a "status" key ("success" / "error" / "info")
 - **Server launch:** `cd c:\Muru_Workspace && adk web` — must run from PARENT directory, not from inside metro_city_demo/
-- **Subfolders:** `reflection/` contains standalone pattern reference implementations with relative imports (`from ..ToolName import ToolName`)
+- **Archive/:** `Archive/` contains retired agent files kept for reference (e.g., A5_Move_Cancel_Agent.py with inline PRE-SEND CHECK pattern)
+- **reflection/:** `reflection/` folder and `__init__.py` retained but empty of live code — LoopAgent moved to main folder
 
 ---
 

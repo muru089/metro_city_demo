@@ -35,12 +35,10 @@ root_agent  (agent.py)                               gemini-2.5-flash
   +-- sales_agent          (A2_Sales_Agent.py)       via AgentTool
   +-- billing_agent        (A3_Billing_Agent.py)     via AgentTool
   +-- scheduling_agent     (A4_Scheduling_Agent.py)  via AgentTool
-  +-- move_cancel_loop     (A5_Move_Cancel_LoopAgent.py) via AgentTool ← LIVE
-        +-- MoverDrafter         (LlmAgent, flash-lite, 8 tools)
-        +-- BusinessRulesCritic  (LlmAgent, flash, no tools)
-        +-- RefinerOrExiter      (LlmAgent, flash-lite, no tools)
+  +-- moves_agent          (A5_Move_Cancel_Agent.py) via AgentTool ← LIVE
+        Single agent with inline 7-rule PRE-SEND CHECK self-review
 
-Archive/A5_Move_Cancel_Agent.py                      (archived — inline PRE-SEND CHECK reference)
+Archive/A5_Move_Cancel_LoopAgent.py                  (archived — LoopAgent self-reflection reference)
 ```
 
 ---
@@ -251,15 +249,15 @@ CREATE TABLE customer_accounts (
 
 ---
 
-### A5 -- move_cancel_loop (A5_Move_Cancel_LoopAgent.py)
+### A5 -- moves_agent (A5_Move_Cancel_Agent.py)
 
 **Purpose:** Execute service moves to a new address and service cancellations.
-**Implementation:** True two-LLM LoopAgent (MoverDrafter → BusinessRulesCritic → RefinerOrExiter). `Archive/A5_Move_Cancel_Agent.py` is the retired single-agent version kept for reference.
-**Tools (MoverDrafter only):** T5a_GetBalance, T5_PayBill, T3_EquipmentLogic, T8_CheckFeeWaiver, T9_BookAppt, T12_ExecuteMoveCancel, T11_SetReminder, T13_SendConfirmationReceipt
+**Implementation:** Single Squad Agent with inline 7-rule PRE-SEND CHECK self-review. `Archive/A5_Move_Cancel_LoopAgent.py` is the LoopAgent pattern reference (archived — too many LLM calls for active debugging).
+**Tools:** T5a_GetBalance, T5_PayBill, T3_EquipmentLogic, T8_CheckFeeWaiver, T9_BookAppt, T12_ExecuteMoveCancel, T11_SetReminder, T13_SendConfirmationReceipt
 
 **State Machine:** STATE 0 (Init + Resume Detection) → STATE 1 (Billing Gate) → STATE 2 (Address Check) → STATE 3A/3B (Move or Cancel Flow) → STATE 4 (Execute)
 
-**STATE 0 -- Resume Detection:** On every invocation, MoverDrafter checks TOOL CALL HISTORY (not text) for 4 signals and jumps to the pending step. Signal detection is tool-call-based to avoid false triggers from plan names appearing in customer account data.
+**STATE 0 -- Resume Detection:** On every invocation, moves_agent checks TOOL CALL HISTORY (not text) for 4 signals and jumps to the pending step. Signal detection is tool-call-based to avoid false triggers from plan names appearing in customer account data.
 
 **Signals (checked in order, highest priority first):**
 - **SIGNAL 4:** T9_BookAppt called without date → customer picking slot → confirm date only
@@ -401,14 +399,13 @@ pending_balance must be $0.00 before Move or Cancel proceeds. No exceptions.
 ## LoopAgent Self-Reflection Architecture
 
 **File:** `A5_Move_Cancel_LoopAgent.py` (main folder — LIVE)
-**Status:** LIVE — `move_cancel_loop` is wired into `agent.py` and handles all move/cancel flows.
-`Archive/A5_Move_Cancel_Agent.py` is retained as a reference for the retired inline PRE-SEND CHECK pattern.
+**Status:** Archived — `Archive/A5_Move_Cancel_LoopAgent.py`. Swapped back to single-agent `moves_agent` during active debugging to reduce LLM call overhead (3 calls/turn → 1 call/turn).
 
-**Pattern vs. retired A5 inline check:**
-| Approach | Where | Status | Reliability |
+**Pattern comparison:**
+| Approach | Where | Status | Notes |
 |---|---|---|---|
-| Inline PRE-SEND CHECK | Archive/A5_Move_Cancel_Agent.py | Archived | Same LLM checks its own output — lower |
-| True LoopAgent critique | A5_Move_Cancel_LoopAgent.py | **LIVE** | Separate LLM audits independently — higher |
+| Inline PRE-SEND CHECK | A5_Move_Cancel_Agent.py | **LIVE** | 1 LLM call/turn — faster for debugging |
+| True LoopAgent critique | Archive/A5_Move_Cancel_LoopAgent.py | Archived | 3 LLM calls/turn — restore when demo is stable |
 
 **Three agents in the loop:**
 | Agent | Model | Tools | Role |
@@ -424,7 +421,7 @@ pending_balance must be $0.00 before Move or Cancel proceeds. No exceptions.
 
 **Business rules audited (7):** Balance Gate, Explicit Consent, Fee Waiver Integrity, Address Check Before Order, Plan Confirmed Before Scheduling, No Internal Variable Exposure, No Premature Move Confirmation
 
-**Import path:** `from metro_city_demo.A5_Move_Cancel_LoopAgent import move_cancel_loop`
+**Import path (if restoring):** `from metro_city_demo.Archive.A5_Move_Cancel_LoopAgent import move_cancel_loop`
 
 ---
 
@@ -441,8 +438,8 @@ pending_balance must be $0.00 before Move or Cancel proceeds. No exceptions.
 - **T13 exception:** Opens its own sqlite3.connect("metro_city.db") -- never wrap with create_db_tool
 - **All tool responses are dicts** with at minimum a "status" key ("success" / "error" / "info")
 - **Server launch:** `cd c:\Muru_Workspace && adk web` — must run from PARENT directory, not from inside metro_city_demo/
-- **Archive/:** `Archive/` contains retired agent files kept for reference (e.g., A5_Move_Cancel_Agent.py with inline PRE-SEND CHECK pattern)
-- **reflection/:** `reflection/` folder and `__init__.py` retained but empty of live code — LoopAgent moved to main folder
+- **Archive/:** `Archive/` contains reference implementations (A5_Move_Cancel_LoopAgent.py — LoopAgent pattern; restore when demo is stable)
+- **reflection/:** `reflection/` folder and `__init__.py` retained but empty of live code
 
 ---
 

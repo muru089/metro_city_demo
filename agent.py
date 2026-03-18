@@ -14,14 +14,14 @@ ARCHITECTURE OVERVIEW:
       |-- sales_agent          (Domain Agent: plans, upgrades, new service)
       |-- billing_agent        (Domain Agent: payments, autopay, balance)
       |-- scheduling_agent     (Domain Agent: book/reschedule appointments)
-      |-- move_cancel_loop     (LoopAgent   : move + cancel with compliance critic)
+      |-- moves_agent          (Squad Agent : move + cancel with inline PRE-SEND CHECK)
 
 WHY A 2-TIER ARCHITECTURE:
     - The Uber Agent handles auth once, centrally. No sub-agent ever re-prompts
       for an account ID if root_agent already verified the customer.
     - Domain Agents are narrow specialists -- they only know their own tools.
-    - move_cancel_loop is a LoopAgent that orchestrates tools across domains
-      (billing, scheduling, equipment) with an independent BusinessRulesCritic pass.
+    - moves_agent is a Squad Agent that orchestrates tools across domains
+      (billing, scheduling, equipment) with an inline PRE-SEND CHECK self-review.
     - A Supervisor layer (3rd tier) is not needed yet -- the routing table here
       is simple enough that root_agent can decide directly. Add a Supervisor
       only if two domain agents need to hand off to each other sequentially.
@@ -47,7 +47,7 @@ from .A1_Service_Agent    import service_agent
 from .A2_Sales_Agent      import sales_agent
 from .A3_Billing_Agent    import billing_agent
 from .A4_Scheduling_Agent import scheduling_agent
-from .A5_Move_Cancel_LoopAgent import move_cancel_loop
+from .A5_Move_Cancel_Agent import moves_agent
 
 # =============================================================================
 # IMPORT AND WIRE T1 -- THE AUTHENTICATION TOOL
@@ -84,7 +84,7 @@ root_agent = Agent(
         AgentTool(sales_agent),      # Domain: plans and upgrades
         AgentTool(billing_agent),    # Domain: payments and autopay
         AgentTool(scheduling_agent), # Domain: appointments and reminders
-        AgentTool(move_cancel_loop), # LoopAgent: move + cancel with BusinessRulesCritic
+        AgentTool(moves_agent),      # Squad: move + cancel with inline PRE-SEND CHECK
     ],
 
     instruction="""
@@ -119,8 +119,8 @@ root_agent = Agent(
 
     | Customer intent                                          | Sub-agent to call   |
     | :------------------------------------------------------- | :------------------ |
-    | Move, new address, transfer, "cancel unless..."          | move_cancel_loop    |
-    | Cancel service or stop service                           | move_cancel_loop    |
+    | Move, new address, transfer, "cancel unless..."          | moves_agent    |
+    | Cancel service or stop service                           | moves_agent    |
     | Fiber check, coverage, speed at an address               | service_agent       |
     | Upgrade, downgrade, change plan, pricing, new sign-up    | sales_agent         |
     | Pay bill, check balance, autopay, next bill              | billing_agent       |
@@ -128,26 +128,26 @@ root_agent = Agent(
     | TV, mobile, streaming (not internet)                     | HARD STOP           |
     | Speak to a human or manager                              | ESCALATION          |
     | Permanently update/change/add card on file               | ESCALATION          |
-    | "Can I use a different card?" (for a payment)            | move_cancel_loop         |
+    | "Can I use a different card?" (for a payment)            | moves_agent         |
 
     Disambiguation:
     - "Cancel" alone → ask: "Are you canceling your service, or a technician appointment?"
     - "Change" alone → ask: "Are you changing your plan, or your address?"
-    - "Different card" or "other card" for a payment → move_cancel_loop (it explains card policy).
+    - "Different card" or "other card" for a payment → moves_agent (it explains card policy).
     - Only escalate card requests that are about permanently changing the card on file.
-    - Any mention of "move" or "new address" → move_cancel_loop immediately.
-    - "Cancel unless fiber is available" → move_cancel_loop (it handles both outcomes).
+    - Any mention of "move" or "new address" → moves_agent immediately.
+    - "Cancel unless fiber is available" → moves_agent (it handles both outcomes).
     - If the customer is responding with a date preference, says a date "doesn't work",
-      or picks a time slot IN THE CONTEXT of an ongoing move conversation → move_cancel_loop.
+      or picks a time slot IN THE CONTEXT of an ongoing move conversation → moves_agent.
       Do NOT route date follow-ups to scheduling_agent mid-move-flow.
     - scheduling_agent is ONLY for standalone appointment requests (not part of a move).
     - If the customer responds with a simple affirmative ("Sure", "Yes", "OK", "Go ahead",
       "Sounds good", "Please do") IN THE CONTEXT of an ongoing move or cancel flow
-      (e.g., move_cancel_loop just asked about clearing a balance or confirming a step)
-      → move_cancel_loop. Do NOT route bare affirmatives to billing_agent.
+      (e.g., moves_agent just asked about clearing a balance or confirming a step)
+      → moves_agent. Do NOT route bare affirmatives to billing_agent.
     - If the customer asks about waiving a fee, questions an installation fee, or says
       "can you waive", "waive my fee", "why is there a fee" IN THE CONTEXT of a move
-      conversation → move_cancel_loop. Do NOT route fee questions mid-move to sales_agent.
+      conversation → moves_agent. Do NOT route fee questions mid-move to sales_agent.
 
     Hard stop script: "I'm not able to assist with that here. Please call
     1-800-METRO-CITY or visit metrocity.com/support. Is there anything else I can help with?"
@@ -175,11 +175,11 @@ root_agent = Agent(
     User: "I want to move to 100 First St and cancel if no fiber. My account is 10004."
     [Call T1_GetUpdateContact(10004) → {first_name: "Mike"}]
     -- Do NOT ask "What can I help you with?" -- intent is already known --
-    [Call move_cancel_loop: "Account ID: 10004. Mike wants to move to 100 First St.
+    [Call moves_agent: "Account ID: 10004. Mike wants to move to 100 First St.
      Cancel service if fiber is not available at that address.
      Also apply any eligible fee waiver."]
-    [move_cancel_loop returns its full response]
-    You: [Speak move_cancel_loop's response to Mike] ← STOP. Do not call move_cancel_loop again.
+    [moves_agent returns its full response]
+    You: [Speak moves_agent's response to Mike] ← STOP. Do not call moves_agent again.
 
     **Example 2 -- Account ID only, then intent:**
     User: "10004"
@@ -198,50 +198,50 @@ root_agent = Agent(
     You: [Speak sales_agent's response] ← STOP. Do not call sales_agent again.
 
     **Example 4 -- Clarifying question during a move flow:**
-    [move_cancel_loop asked "what date works best? Morning or afternoon available."]
+    [moves_agent asked "what date works best? Morning or afternoon available."]
     User: "What are the exact times for AM and PM?"
-    -- Clarifying question mid-flow. Pass the already-confirmed address so move_cancel_loop does NOT restart. --
-    [Call move_cancel_loop: "Account ID: 10004. Mike is moving to 100 First St (Fiber already confirmed).
+    -- Clarifying question mid-flow. Pass the already-confirmed address so moves_agent does NOT restart. --
+    [Call moves_agent: "Account ID: 10004. Mike is moving to 100 First St (Fiber already confirmed).
      He is asking about the exact time range for AM and PM slots.
      Answer directly and continue scheduling — do NOT restart the address check."]
-    [move_cancel_loop returns its response]
-    You: [Speak move_cancel_loop's response] ← STOP. Do not call scheduling_agent.
+    [moves_agent returns its response]
+    You: [Speak moves_agent's response] ← STOP. Do not call scheduling_agent.
 
     **Example 5 -- Date selection during a move flow:**
-    [move_cancel_loop presented 4 slots and is waiting for a pick]
+    [moves_agent presented 4 slots and is waiting for a pick]
     User: "March 10 morning works for me."
     -- Date pick mid-flow. Always include the confirmed address in the handoff. --
-    [Call move_cancel_loop: "Account ID: 10004. Mike is moving to 100 First St (Fiber already confirmed).
+    [Call moves_agent: "Account ID: 10004. Mike is moving to 100 First St (Fiber already confirmed).
      He selected March 10 morning for the technician appointment. Confirm and proceed."]
-    [move_cancel_loop returns its response]
-    You: [Speak move_cancel_loop's response] ← STOP. Do not call scheduling_agent.
+    [moves_agent returns its response]
+    You: [Speak moves_agent's response] ← STOP. Do not call scheduling_agent.
 
     **Example 6 -- Date declined during a move flow:**
-    [move_cancel_loop presented slots]
+    [moves_agent presented slots]
     User: "March 8 doesn't work for me."
-    -- Date declined mid-flow. Pass the confirmed address so move_cancel_loop does NOT restart. --
-    [Call move_cancel_loop: "Account ID: 10004. Mike is moving to 100 First St (Fiber already confirmed).
+    -- Date declined mid-flow. Pass the confirmed address so moves_agent does NOT restart. --
+    [Call moves_agent: "Account ID: 10004. Mike is moving to 100 First St (Fiber already confirmed).
      March 8 does not work for him. Please offer other available slots."]
-    [move_cancel_loop returns its response]
-    You: [Speak move_cancel_loop's response] ← STOP. Do not call scheduling_agent.
+    [moves_agent returns its response]
+    You: [Speak moves_agent's response] ← STOP. Do not call scheduling_agent.
 
     **Example 7 -- Affirmative response during a move flow balance gate:**
-    [move_cancel_loop asked: "I see a pending balance of $82.45. Would you like me to charge the card on file?"]
+    [moves_agent asked: "I see a pending balance of $82.45. Would you like me to charge the card on file?"]
     User: "Sure." (or "Yes", "OK", "Go ahead", "Please do")
-    -- This is consent to pay within a move flow. Route to move_cancel_loop, NOT billing_agent. --
-    [Call move_cancel_loop: "Account ID: 10004. Mike is moving to 100 First St.
+    -- This is consent to pay within a move flow. Route to moves_agent, NOT billing_agent. --
+    [Call moves_agent: "Account ID: 10004. Mike is moving to 100 First St.
      He confirmed yes to clearing his $82.45 balance. Process the payment and continue the move flow."]
-    [move_cancel_loop returns its response]
-    You: [Speak move_cancel_loop's response] ← STOP. Do not call billing_agent.
+    [moves_agent returns its response]
+    You: [Speak moves_agent's response] ← STOP. Do not call billing_agent.
 
     **Example 8 -- Fee waiver question during a move flow:**
-    [move_cancel_loop informed the customer of a $99 installation fee]
+    [moves_agent informed the customer of a $99 installation fee]
     User: "Can you waive my fees? It seems high."
-    -- Fee question within an active move flow. Route to move_cancel_loop, NOT sales_agent. --
-    [Call move_cancel_loop: "Account ID: 10004. Mike is moving to 100 First St (Fiber already confirmed).
+    -- Fee question within an active move flow. Route to moves_agent, NOT sales_agent. --
+    [Call moves_agent: "Account ID: 10004. Mike is moving to 100 First St (Fiber already confirmed).
      He is asking if the $99 installation fee can be waived. Explain the waiver rules and
      which condition(s) he did not meet. Do NOT call T8 again — you already have the result."]
-    [move_cancel_loop returns its response]
-    You: [Speak move_cancel_loop's response] ← STOP. Do not call sales_agent.
+    [moves_agent returns its response]
+    You: [Speak moves_agent's response] ← STOP. Do not call sales_agent.
     """,
 )

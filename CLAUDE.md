@@ -251,14 +251,21 @@ CREATE TABLE customer_accounts (
 
 ---
 
-### A5 -- move_cancel_loop (A5_Move_Cancel_Agent.py)
+### A5 -- move_cancel_loop (A5_Move_Cancel_LoopAgent.py)
 
 **Purpose:** Execute service moves to a new address and service cancellations.
-**Tools:** T5a_GetBalance, T5_PayBill, T3_EquipmentLogic, T8_CheckFeeWaiver, T9_BookAppt, T12_ExecuteMoveCancel, T11_SetReminder, T13_SendConfirmationReceipt
+**Implementation:** True two-LLM LoopAgent (MoverDrafter → BusinessRulesCritic → RefinerOrExiter). `Archive/A5_Move_Cancel_Agent.py` is the retired single-agent version kept for reference.
+**Tools (MoverDrafter only):** T5a_GetBalance, T5_PayBill, T3_EquipmentLogic, T8_CheckFeeWaiver, T9_BookAppt, T12_ExecuteMoveCancel, T11_SetReminder, T13_SendConfirmationReceipt
 
 **State Machine:** STATE 0 (Init + Resume Detection) → STATE 1 (Billing Gate) → STATE 2 (Address Check) → STATE 3A/3B (Move or Cancel Flow) → STATE 4 (Execute)
 
-**STATE 0 -- Resume Detection:** On every invocation, move_cancel_loop scans conversation history for 4 signals (slots presented, plan offered, fee communicated, fiber confirmed) and jumps directly to the pending step. This prevents re-running the full flow on each ADK re-invocation.
+**STATE 0 -- Resume Detection:** On every invocation, MoverDrafter checks TOOL CALL HISTORY (not text) for 4 signals and jumps to the pending step. Signal detection is tool-call-based to avoid false triggers from plan names appearing in customer account data.
+
+**Signals (checked in order, highest priority first):**
+- **SIGNAL 4:** T9_BookAppt called without date → customer picking slot → confirm date only
+- **SIGNAL 3:** T8 called, T9 not yet called → plan selection or scheduling
+- **SIGNAL 2:** T3 called, T8 not yet called → call T8, deliver MSG1+2, HARD STOP
+- **SIGNAL 1:** T5_PayBill called in prior turn → call T3, deliver MSG1+2, HARD STOP
 
 **Move Flow (6 steps in order):**
 1. **Balance Gate:** Call T5a_GetBalance. If pending_balance > 0, offer T5_PayBill. Cannot proceed until balance = $0.
@@ -273,7 +280,7 @@ CREATE TABLE customer_accounts (
 2. **Confirm Intent:** Explicit YES required before proceeding.
 3. **Execute:** T12_ExecuteMoveCancel(action="CANCEL"). Then T13_SendConfirmationReceipt.
 
-**PRE-SEND CHECK (inline self-reflection):** The instruction includes a 6-point critique checklist the agent runs before every response (repetition, multiple asks, variable name exposure, premature tool calls, unauthorized T12, multi-step merging). See reflection/ for the true two-LLM LoopAgent version.
+**Self-Reflection:** BusinessRulesCritic audits 7 rules (Balance Gate, Explicit Consent, Fee Waiver Integrity, Address Check Before Order, Plan Confirmed Before Scheduling, No Internal Variable Exposure, No Premature Move Confirmation). Violations are rewritten by RefinerOrExiter before the customer sees the response.
 
 **Address Validation Traps:**
 - **Same-address trap:** New address = current address: "You are already at that address."
@@ -391,33 +398,31 @@ pending_balance must be $0.00 before Move or Cancel proceeds. No exceptions.
 
 ---
 
-## LoopAgent Self-Reflection Reference (reflection/)
+## LoopAgent Self-Reflection Architecture
 
-**File:** `reflection/A5_Move_Cancel_LoopAgent.py`
-**Purpose:** Reference implementation of the true two-LLM self-reflection pattern. NOT wired into agent.py — standalone demo for team review.
-
+**File:** `A5_Move_Cancel_LoopAgent.py` (main folder — LIVE)
 **Status:** LIVE — `move_cancel_loop` is wired into `agent.py` and handles all move/cancel flows.
-`A5_Move_Cancel_Agent.py` is retained as a reference for the inline PRE-SEND CHECK pattern.
+`Archive/A5_Move_Cancel_Agent.py` is retained as a reference for the retired inline PRE-SEND CHECK pattern.
 
-**Pattern vs. A5 inline check:**
+**Pattern vs. retired A5 inline check:**
 | Approach | Where | Status | Reliability |
 |---|---|---|---|
-| Inline PRE-SEND CHECK | A5_Move_Cancel_Agent.py | Reference only | Same LLM checks its own output — lower |
-| True LoopAgent critique | reflection/A5_Move_Cancel_LoopAgent.py | **LIVE in demo** | Separate LLM audits independently — higher |
+| Inline PRE-SEND CHECK | Archive/A5_Move_Cancel_Agent.py | Archived | Same LLM checks its own output — lower |
+| True LoopAgent critique | A5_Move_Cancel_LoopAgent.py | **LIVE** | Separate LLM audits independently — higher |
 
 **Three agents in the loop:**
 | Agent | Model | Tools | Role |
 |---|---|---|---|
 | MoverDrafter | gemini-2.5-flash-lite | All 8 | Generates customer response. No self-check. |
-| BusinessRulesCritic | gemini-2.5-flash | None | Audits 6 business rules. Outputs APPROVED or VIOLATION lines. |
+| BusinessRulesCritic | gemini-2.5-flash | None | Audits 7 business rules. Outputs APPROVED or VIOLATION lines. |
 | RefinerOrExiter | gemini-2.5-flash-lite | None | Passes approved draft unchanged; rewrites only flagged violations. |
 
 **Loop mechanics:**
-- `LoopAgent(max_iterations=2)` is the circuit breaker — guarantees response even if violations persist
+- `LoopAgent(max_iterations=1)` — one clean pass: draft → audit → fix/pass. max_iterations=2 was removed because a 2nd MoverDrafter iteration caused self-response bugs (drafter saw its own output as a customer message).
 - Exit via `event.actions.escalate` (ADK native) — no `exit_loop` tool (that is a LangGraph pattern)
 - State shared via conversation history (`include_contents='default'`) — no TypedDict (also LangGraph)
 
-**Business rules audited (6):** Balance Gate, Explicit Consent, Fee Waiver Integrity, Address Check Before Order, Plan Confirmed Before Scheduling, No Internal Variable Exposure
+**Business rules audited (7):** Balance Gate, Explicit Consent, Fee Waiver Integrity, Address Check Before Order, Plan Confirmed Before Scheduling, No Internal Variable Exposure, No Premature Move Confirmation
 
 **Import path:** `from metro_city_demo.A5_Move_Cancel_LoopAgent import move_cancel_loop`
 
@@ -438,6 +443,58 @@ pending_balance must be $0.00 before Move or Cancel proceeds. No exceptions.
 - **Server launch:** `cd c:\Muru_Workspace && adk web` — must run from PARENT directory, not from inside metro_city_demo/
 - **Archive/:** `Archive/` contains retired agent files kept for reference (e.g., A5_Move_Cancel_Agent.py with inline PRE-SEND CHECK pattern)
 - **reflection/:** `reflection/` folder and `__init__.py` retained but empty of live code — LoopAgent moved to main folder
+
+---
+
+## Test Infrastructure
+
+**File:** `c:\Muru_Workspace\test_conversation.py` (parent directory, not inside metro_city_demo/)
+**Purpose:** Headless simulation of a full end-to-end conversation using ADK Runner — no web UI required. Used to reproduce bugs and verify fixes in the move/cancel flow.
+
+**How it works:**
+- Loads `.env` from `metro_city_demo/` for the Gemini API key
+- Creates an ADK `Runner` with `InMemorySessionService` directly (bypasses `adk web`)
+- Runs a hardcoded multi-turn conversation against the live `root_agent`
+- Prints each turn's user input, agent response text, and all tool calls at root level
+- Tracks whether T12_ExecuteMoveCancel was called and with which arguments
+- Resets `metro_city.db` via `z_reset_world.py` at the end so data is clean for the next run
+
+**Current test scenario (Account 10004 — Mike, move flow with balance gate):**
+```python
+TURNS = [
+    (1, "I want to move to 100 First St. Cancel if fiber not available. Waive fees. Account 10004."),
+    (2, "Sure"),
+    (3, "Fiber 1 Gig"),
+    (4, "Option 2 is fine"),
+    (5, "Yes"),
+]
+```
+
+**Run command (from c:\Muru_Workspace):**
+```bash
+python test_conversation.py
+```
+
+**Limitations:**
+- Only root-level tool calls are captured in event tracking; inner tool calls within LoopAgent sub-agents are not directly visible
+- Output file is written to the same directory as the script
+
+---
+
+## Bug Fix History (via Simulation Runs)
+
+Bugs discovered and fixed using `test_conversation.py` against the live move/cancel flow:
+
+| Bug | Root Cause | Fix Applied |
+|-----|-----------|-------------|
+| **Balance gate bypass** | MoverDrafter's text-based SIGNAL detection saw "Fiber 1 Gig" in T1_GetUpdateContact tool result (customer's current plan) and falsely triggered SIGNAL 3, jumping to plan selection before checking balance | Rewrote SIGNAL detection to be tool-call-history-based — signals only fire when the named tool appears in prior turn's call history |
+| **"Sure" misinterpreted as plan selection** | root_agent routed "Sure" (consent to payment) to billing_agent instead of move_cancel_loop | Strengthened routing rules: affirmative responses mid-move go to move_cancel_loop, not billing_agent |
+| **Step merging** | MoverDrafter combined multiple state machine steps into one response (e.g., fiber + fee + plan question in one message) | Added explicit HARD STOP instructions and ONE-STEP-PER-RESPONSE guardrails throughout STATE 3A |
+| **T12 fires action="CANCEL" instead of "MOVE"** | "Cancel if fiber not available" in original user request caused MoverDrafter to pass action="CANCEL" to T12 even when fiber was available | Added explicit guardrail in STATE 3A Step C and STATE 4: action="MOVE" is mandatory in the MOVE flow; cancel condition is evaluated in STATE 2 only |
+| **"We're all set" without calling T9** | In SIGNAL 3, after customer named a plan, MoverDrafter used completion language without calling T9_BookAppt | Strengthened SIGNAL 3 instruction: after plan named, MUST call T9, present 4 slots, forbidden to use completion language |
+| **Wrong fee waiver for 2yr tenure** | BusinessRulesCritic Rule 3 only checked whether T8 was called, not whether the drafter's fee claim matched T8's actual result | Rewrote Rule 3 to cross-check T8 tool result (ground truth) against drafter's fee statement |
+| **max_iterations=2 self-response bug** | With 2 iterations, MoverDrafter saw its own iteration-1 response in history and treated it as a customer message, producing one-word "Yes." replies | Set max_iterations=1 (one clean draft→audit→fix pass) |
+| **VA responses too verbose** | MoverDrafter produced multi-paragraph responses with previews of future steps | Added BREVITY GUARDRAILS (rules 10-13): one step per response, 2-4 sentences max, no step previews, no tool pre-announcements |
 
 ---
 

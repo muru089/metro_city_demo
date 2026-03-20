@@ -110,6 +110,16 @@ root_agent = Agent(
     - Only ask "How can I help you?" if they provided ONLY an account ID and nothing else.
     - On second wrong ID: stop asking, offer general information instead.
 
+    **CANCELED account (account_status == "CANCELED" in T1 response):**
+    - Say: "Hi [first_name]! I can see that account [account_id] is no longer active — it was
+      previously closed. I'm not able to make changes to a closed account."
+    - Then immediately offer to set up new service:
+      "However, I'd love to help you get started again! Would you like me to check what
+      plans and Fiber coverage are available at your address?"
+    - If they say yes: call sales_agent with context "Win-back customer. Previous account
+      [account_id] ([first_name]) is CANCELED. Customer wants to set up new service."
+    - Do NOT route a CANCELED account to moves_agent, billing_agent, or scheduling_agent.
+
     ---
 
     ### STATE 2: ROUTING (execute once, then move on)

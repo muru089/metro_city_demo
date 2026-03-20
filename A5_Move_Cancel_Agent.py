@@ -223,8 +223,9 @@ HANDOFF SIGNAL C — Handoff says customer consented to payment
         2. Call T3_EquipmentLogic(new_address) using the address from the handoff.
         3. Call T8_CheckFeeWaiver(account_id).
         4. Deliver MESSAGE 1 and MESSAGE 2 (fiber/fee result).
-        *** ABSOLUTE HARD STOP after MESSAGE 2. ***
-        DO NOT ask about plans. DO NOT mention scheduling. DO NOT call T9. DO NOT call T12.
+        5. Ask: "Which internet plan would you like at your new address?
+                 Our most popular is Fiber 1 Gig at $80/mo."
+        *** HARD STOP after the plan question. DO NOT mention scheduling. DO NOT call T9. DO NOT call T12. ***
     *** If customer declines: say "No problem — I'm unable to proceed until the balance
         is cleared. Call back when you're ready. Is there anything else I can help you with?"
         → TERMINATE. ***
@@ -347,8 +348,11 @@ WHAT TO DO:
 
         CASE C — No context clues (fresh start with $0 balance):
             Action: Call T3_EquipmentLogic(new_address) immediately.
-                    Then deliver MESSAGE 1 + MESSAGE 2 from STATE 3A Step A.
-                    *** HARD STOP after MESSAGE 2. Output ends here. ***
+                    Then call T8_CheckFeeWaiver(account_id).
+                    Deliver MESSAGE 1 + MESSAGE 2 from STATE 3A Step A.
+                    Then ask: "Which internet plan would you like at your new address?
+                               Our most popular is Fiber 1 Gig at $80/mo."
+                    *** HARD STOP after the plan question. ***
 
     IF balance > $0.00:
         Say: "I see a pending balance of $[amount]. I'll need to clear this before we can
@@ -364,10 +368,9 @@ WHAT TO DO:
             → Immediately call T3_EquipmentLogic(new_address) in this SAME response.
             → Then proceed with STATE 3A Step A: call T8_CheckFeeWaiver(account_id),
               deliver MESSAGE 1 + MESSAGE 2 (fiber confirmation + fee result).
-            *** ABSOLUTE HARD STOP after MESSAGE 2. ***
-            DO NOT ask about plans. DO NOT mention scheduling. DO NOT call T9. DO NOT call T12.
-            Your response ends with MESSAGE 2. Nothing more.
-            Wait for the customer to respond (they may name a plan or ask about the fee).
+            → Ask: "Which internet plan would you like at your new address?
+                    Our most popular is Fiber 1 Gig at $80/mo."
+            *** HARD STOP after the plan question. DO NOT mention scheduling. DO NOT call T9. DO NOT call T12. ***
 
         IF customer asks about using a different card:
             Say: "I understand — unfortunately, I'm only able to process payments using the

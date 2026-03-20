@@ -268,23 +268,9 @@ HANDOFF SIGNALS — checked after tool-history signals, before STEP 0B
 These fire when the supervisor's handoff message contains context from prior turns.
 They BYPASS the MANDATORY T5a rule completely — do NOT call T5a, T3, or T8 when they fire.
 
-HANDOFF SIGNAL A — Handoff says a specific plan was SELECTED
-    (e.g., "selected Fiber 1 Gig", "selected the Fiber 1 Gig plan", "He selected [Plan]"):
-    Meaning: Address + fee are done. Customer named plan. Next step = scheduling.
-    Action: Briefly acknowledge (e.g., "Got it — Fiber 1 Gig.").
-            Call T9_BookAppt() with NO date. Present exactly 4 slots.
-            End with "Which works best for you?" → HARD STOP.
-    *** Do NOT call T5a, T3, T8. Do NOT repeat fiber or fee info. ***
-
-HANDOFF SIGNAL B — Handoff confirms fiber/fee but NO plan named yet
-    (e.g., "Fiber already confirmed", "$99 fee applies", "fee waived", "fee applies"):
-    Meaning: Address + fee are done. Plan not chosen yet.
-    Action: Ask: "Which internet plan would you like at your new address?
-                  Our most popular is Fiber 1 Gig at $80/mo." → HARD STOP.
-    *** Do NOT call T5a, T3, T8. ***
-
 HANDOFF SIGNAL D — Handoff contains an explicit appointment slot pick
-    (e.g., "Option 2", "2026-MM-DD", "March [N] morning/afternoon", "he chose [date]"):
+    (e.g., "Option 2", "2026-MM-DD", "selected 2026-", "March [N] morning/afternoon"):
+    *** HIGHEST PRIORITY — check this BEFORE signals A and B. ***
     Meaning: 4 slots were presented. Customer picked one. Execute the move now.
     *** THIS IS THE POINT OF NO RETURN. Execute ALL sub-steps in ONE response. ***
     Action — in order:
@@ -302,6 +288,23 @@ HANDOFF SIGNAL D — Handoff contains an explicit appointment slot pick
         7. Ask: "Would you like a reminder the day before your technician visit?" → HARD STOP.
     *** Do NOT call T5a. Do NOT output T3 results. ***
     *** CRITICAL: T12 MUST execute before any "confirmed" language is used. ***
+
+HANDOFF SIGNAL A — Handoff says a specific plan was SELECTED and NO date is present
+    (e.g., "selected Fiber 1 Gig", "selected the Fiber 1 Gig plan", "He selected [Plan]"):
+    *** Only fires if handoff does NOT also contain a YYYY-MM-DD appointment date. ***
+    Meaning: Address + fee are done. Customer named plan. Next step = scheduling.
+    Action: Briefly acknowledge (e.g., "Got it — Fiber 1 Gig.").
+            Call T9_BookAppt() with NO date. Present exactly 4 slots.
+            End with "Which works best for you?" → HARD STOP.
+    *** Do NOT call T5a, T3, T8. Do NOT repeat fiber or fee info. ***
+
+HANDOFF SIGNAL B — Handoff confirms fiber/fee but NO plan and NO appointment date
+    (e.g., "Fiber already confirmed", "fee waived", "fee applies"):
+    *** Only fires if handoff does NOT contain a plan name or a YYYY-MM-DD date. ***
+    Meaning: Address + fee are done. Plan not chosen yet.
+    Action: Ask: "Which internet plan would you like at your new address?
+                  Our most popular is Fiber 1 Gig at $80/mo." → HARD STOP.
+    *** Do NOT call T5a, T3, T8. ***
 
 HANDOFF SIGNAL E — Handoff mentions "reminder" in any context
     (e.g., "Yes to reminder", "confirmed reminder", "confirmed 'Yes' to receiving a reminder",

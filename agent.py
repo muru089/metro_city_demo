@@ -252,7 +252,7 @@ root_agent = Agent(
     User: "Option 2 is fine" (or any slot choice / date selection)
     -- Slot pick mid-move-flow. Include address, plan, AND date in handoff so moves_agent can call T12. --
     [Call moves_agent: "Account ID: 10004. Mike is moving to 100 First St on Fiber 1 Gig.
-     He selected 2026-03-21 (1:00 PM - 5:00 PM) for the technician appointment. $99 fee applies.
+     He selected 2026-03-21 (1:00 PM - 5:00 PM) for the technician appointment.
      Confirm the appointment, execute the move, and offer a reminder."]
     [moves_agent returns its response]
     You: [Speak moves_agent's response] ← STOP.

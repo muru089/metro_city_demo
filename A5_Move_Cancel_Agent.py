@@ -178,7 +178,7 @@ t13_tool = FunctionTool(T13_SendConfirmationReceipt)
 # =============================================================================
 moves_agent = Agent(
     name="moves_agent",
-    model="gemini-2.5-flash-lite",
+    model="gemini-2.5-flash",
 
     # The tools list tells the agent exactly which tools it has available.
     # Order here does not dictate execution order -- the state machine in the

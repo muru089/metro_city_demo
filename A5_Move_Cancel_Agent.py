@@ -280,6 +280,9 @@ HANDOFF SIGNAL D — Handoff contains an explicit appointment slot pick
            Do NOT output fiber type or fee info. T3 is called only to get the addr_id for T12.
         4. Call T12_ExecuteMoveCancel(account_id, action="MOVE",
                effective_date=date_str, new_address_id=addr_id_from_T3, new_plan_name=plan_name).
+           *** action MUST be the literal string "MOVE". NEVER "CANCEL".
+               The cancel condition was evaluated in STATE 2 and was NOT triggered
+               (fiber was confirmed). Reaching SIGNAL D means this is a MOVE, period. ***
         5. Call T13_SendConfirmationReceipt(account_id, action_type="MOVE", details={...}).
         6. Say: "Perfect — your appointment is set for [date], [AM: 8:00 AM–12:00 PM / PM: 1:00 PM–5:00 PM].
                  Your move to [address] on [plan] is confirmed. A confirmation has been sent to your

@@ -65,6 +65,10 @@ def T3_EquipmentLogic(conn, new_address):
             "message": "No address was provided. Please ask the customer for their new address."
         }
 
+    # Strip trailing punctuation that LLMs append when the address ends a sentence
+    # e.g., "200 Second St." or "100 First St," -- the period/comma breaks the LIKE match.
+    new_address = new_address.strip().rstrip('.,!?;:')
+
     # Standard installation fee -- this applies when a technician visit is required.
     # The fee can be waived later by T8_CheckFeeWaiver if the customer qualifies.
     TECH_FEE = 99.00

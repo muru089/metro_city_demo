@@ -22,7 +22,7 @@ A **multi-agent demo** for a fictional metro city telecom company. Simulates a V
 ## System Architecture
 
 **Framework:** Google ADK (`google.adk.agents.Agent`, `google.adk.tools.FunctionTool`, `google.adk.tools.agent_tool.AgentTool`)
-**LLM:** `gemini-2.5-flash` for root_agent; `gemini-2.5-flash-lite` for all domain sub-agents
+**LLM:** `gemini-2.5-flash` for root_agent AND moves_agent; `gemini-2.5-flash-lite` for all other domain sub-agents
 **Database:** SQLite (`metro_city.db`)
 **DB Injection Pattern:** `functools.partial` used to inject `conn` into all DB tools, hiding it from the agent. Helper: `create_db_tool(fn, conn)` defined in each agent file.
 **Exception:** T13_SendConfirmationReceipt opens its own DB connection internally -- do NOT wrap with `create_db_tool`.
@@ -257,13 +257,16 @@ CREATE TABLE customer_accounts (
 
 **State Machine:** STATE 0 (Init + Resume Detection) → STATE 1 (Billing Gate) → STATE 2 (Address Check) → STATE 3A/3B (Move or Cancel Flow) → STATE 4 (Execute)
 
-**STATE 0 -- Resume Detection:** On every invocation, moves_agent checks TOOL CALL HISTORY (not text) for 4 signals and jumps to the pending step. Signal detection is tool-call-based to avoid false triggers from plan names appearing in customer account data.
+**STATE 0 -- Resume Detection (HANDOFF SIGNALS):** AgentTool creates a fresh InMemorySession per invocation, so tool-call history is never available. Resume detection is text-based, reading the supervisor's handoff message. Signals are checked in priority order (D first):
 
-**Signals (checked in order, highest priority first):**
-- **SIGNAL 4:** T9_BookAppt called without date → customer picking slot → confirm date only
-- **SIGNAL 3:** T8 called, T9 not yet called → plan selection or scheduling
-- **SIGNAL 2:** T3 called, T8 not yet called → call T8, deliver MSG1+2, HARD STOP
-- **SIGNAL 1:** T5_PayBill called in prior turn → call T3, deliver MSG1+2, HARD STOP
+**Signals (checked in priority order):**
+- **SIGNAL D:** Handoff contains explicit slot pick (date or "Option N") → execute move (T9 confirm + T3 silent + T12 MOVE + T13 receipt) in one response
+- **SIGNAL E:** Handoff mentions "reminder" → call T11 if affirmative, close conversation
+- **SIGNAL C:** Handoff says customer consented to payment → T5_PayBill + T3 + T8 + fiber/fee result + plan question in one response
+- **SIGNAL A:** Handoff says plan was selected, no date → T9 (no date), present 4 slots, HARD STOP
+- **SIGNAL B:** Handoff confirms fiber/fee, no plan, no date → ask plan question, HARD STOP
+
+**CRITICAL — SIGNAL D action must use action="MOVE" always.** "Cancel if fiber not available" from the original user request must NEVER bleed into SIGNAL D. Reaching SIGNAL D means fiber was confirmed and this is a MOVE. The cancel path was evaluated in STATE 2.
 
 **Move Flow (6 steps in order):**
 1. **Balance Gate:** Call T5a_GetBalance. If pending_balance > 0, offer T5_PayBill. Cannot proceed until balance = $0.
@@ -429,7 +432,8 @@ pending_balance must be $0.00 before Move or Cancel proceeds. No exceptions.
 
 - **Language:** Python 3
 - **Framework:** Google ADK (`google.adk.agents`, `google.adk.tools`)
-- **LLM:** `gemini-2.5-flash` for root_agent; `gemini-2.5-flash-lite` for all domain agents
+- **LLM:** `gemini-2.5-flash` for root_agent and moves_agent; `gemini-2.5-flash-lite` for all other domain agents
+- **moves_agent MUST use `gemini-2.5-flash`** — flash-lite intermittently returns `Part(text=None)` after multi-tool chains (T9), causing agent_tool.py to return '' and breaking Turns 3-5. Do NOT downgrade moves_agent to flash-lite.
 - **DB:** SQLite via `sqlite3`; connection object passed as `conn`
 - **Tool injection:** `functools.partial(tool_fn, conn)` wraps all DB tools before FunctionTool
 - **Tool naming:** T{N}_{PascalCaseName}.py -- file name and function name match
@@ -456,7 +460,7 @@ pending_balance must be $0.00 before Move or Cancel proceeds. No exceptions.
 - Tracks whether T12_ExecuteMoveCancel was called and with which arguments
 - Resets `metro_city.db` via `z_reset_world.py` at the end so data is clean for the next run
 
-**Current test scenario (Account 10004 — Mike, move flow with balance gate):**
+**Persona 3 test — Account 10004 (Mike), billing gate + waiver FAIL, 5 turns ✅ VALIDATED:**
 ```python
 TURNS = [
     (1, "I want to move to 100 First St. Cancel if fiber not available. Waive fees. Account 10004."),
@@ -464,6 +468,16 @@ TURNS = [
     (3, "Fiber 1 Gig"),
     (4, "Option 2 is fine"),
     (5, "Yes"),
+]
+```
+
+**Persona 1 test — Account 10001 (Muru), zero balance + waiver PASS, 4 turns:**
+```python
+TURNS = [
+    (1, "Hi, I'd like to move my service to 200 Second St. Account 10001."),
+    (2, "Fiber 1 Gig"),
+    (3, "Option 2 is fine"),
+    (4, "Yes"),
 ]
 ```
 
@@ -492,6 +506,28 @@ Bugs discovered and fixed using `test_conversation.py` against the live move/can
 | **Wrong fee waiver for 2yr tenure** | BusinessRulesCritic Rule 3 only checked whether T8 was called, not whether the drafter's fee claim matched T8's actual result | Rewrote Rule 3 to cross-check T8 tool result (ground truth) against drafter's fee statement |
 | **max_iterations=2 self-response bug** | With 2 iterations, MoverDrafter saw its own iteration-1 response in history and treated it as a customer message, producing one-word "Yes." replies | Set max_iterations=1 (one clean draft→audit→fix pass) |
 | **VA responses too verbose** | MoverDrafter produced multi-paragraph responses with previews of future steps | Added BREVITY GUARDRAILS (rules 10-13): one step per response, 2-4 sentences max, no step previews, no tool pre-announcements |
+| **Tool-history SIGNALs never fired** | AgentTool creates a fresh InMemorySession on every invocation (agent_tool.py line 155), so no prior tool call history ever exists | Replaced all tool-history SIGNALs with text-based HANDOFF SIGNALS read from the supervisor's handoff message |
+| **Part(text=None) after T9 tool chain** | gemini-2.5-flash-lite intermittently returns a final event with `Part(text=None)` after multi-tool chains; agent_tool.py's last_content fallback returns '' | (1) Patched agent_tool.py to accumulate text across all events (not just last_content). (2) Upgraded moves_agent model to `gemini-2.5-flash` — do NOT revert to flash-lite |
+| **VA silent after fiber+fee (no plan question)** | SIGNAL C, STATE 1 CASE C, and the YES-payment path all had "ABSOLUTE HARD STOP after MESSAGE 2" preventing the plan question | Changed all three paths to close with "Which internet plan would you like at your new address? Our most popular is Fiber 1 Gig at $80/mo." before the hard stop |
+| **T3 address NOT_FOUND with trailing period** | LLMs end handoff sentences with periods — "200 Second St." — breaking T3's LIKE match against "200 Second St" in DB | Added `new_address = new_address.strip().rstrip('.,!?;:')` in T3 before the LIKE query |
+
+---
+
+## Validated Personas (Snapshot 2026-03-20)
+
+These personas run end-to-end with DB confirmation. Do not break these flows when fixing other personas.
+
+| Persona | Account | Archetype | Key Conditions | Status | Turns | DB Verified |
+|---------|---------|-----------|----------------|--------|-------|-------------|
+| Persona 3 | 10004 Mike | Debtor / billing gate | balance=$82.45, tenure=2yr (waiver FAIL) | ✅ VALIDATED | 5 | New acct 10021 at A11, Fiber 1 Gig, start 2026-03-22 |
+
+**Persona 3 must-not-break checklist:**
+- Turn 1: T5a fires, balance=$82.45, VA asks for payment consent. Does NOT proceed.
+- Turn 2: SIGNAL C fires — T5_PayBill + T3("100 First St") + T8 all in one response. Ends with plan question.
+- Turn 3: SIGNAL A fires — T9 (no date), 4 slots presented, HARD STOP.
+- Turn 4: SIGNAL D fires — T9(date) + T3(silent) + T12(action="MOVE") + T13 all in one response. action is "MOVE" not "CANCEL".
+- Turn 5: SIGNAL E fires — T11 set, conversation closed.
+- DB: old account CANCELED with end_date=day-before; new account ACTIVE at new address.
 
 ---
 

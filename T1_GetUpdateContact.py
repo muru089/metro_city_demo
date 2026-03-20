@@ -21,7 +21,7 @@ INPUTS:
                  If not provided, the tool runs in read-only mode.
 
 OUTPUT:
-    Read mode  : {"status": "success", "email": "customer@email.com", "first_name": "Muru"}
+    Read mode  : {"status": "success", "email": "customer@email.com", "first_name": "Muru", "plan_name": "Internet 100"}
     Update mode: {"status": "success", "message": "Updated to ...", "email": "new@email.com"}
     Error      : {"status": "error", "message": "reason"}
 
@@ -90,21 +90,22 @@ def T1_GetUpdateContact(conn, account_id, new_email=None):
     # =========================================================================
     else:
         try:
-            # SELECT the customer's email and first name so the agent can greet them.
+            # SELECT contact info and current plan so the agent can greet the customer
+            # and detect technology migration scenarios (e.g., Internet 100 → Fiber).
             cursor.execute(
-                "SELECT email, first_name FROM customer_accounts WHERE account_id = ?",
+                "SELECT email, first_name, plan_name FROM customer_accounts WHERE account_id = ?",
                 (account_id,)
             )
 
             result = cursor.fetchone()
 
             if result:
-                # Unpack the tuple (e.g., ('muru@mail.com', 'Muru'))
-                email, first_name = result
+                email, first_name, plan_name = result
                 return {
                     "status": "success",
                     "email": email,
-                    "first_name": first_name
+                    "first_name": first_name,
+                    "plan_name": plan_name
                 }
             else:
                 return {"status": "error", "message": "Account ID not found."}

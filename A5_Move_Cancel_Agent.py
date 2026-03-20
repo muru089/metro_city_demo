@@ -223,6 +223,7 @@ HANDOFF SIGNAL C — Handoff says customer consented to payment
         2. Call T3_EquipmentLogic(new_address) using the address from the handoff.
         3. Call T8_CheckFeeWaiver(account_id).
         4. Deliver MESSAGE 1 and MESSAGE 2 (fiber/fee result).
+           Apply TECHNOLOGY MIGRATION ADDITION in MESSAGE 1 if handoff says customer is on "Internet 100".
         5. Ask: "Which internet plan would you like at your new address?
                  Our most popular is Fiber 1 Gig at $80/mo."
         *** HARD STOP after the plan question. DO NOT mention scheduling. DO NOT call T9. DO NOT call T12. ***
@@ -451,9 +452,15 @@ READ THE T3 RESULT:
           Call T8_CheckFeeWaiver(account_id) first, then deliver exactly TWO separate messages
           with a blank line between each. Do NOT merge them into one block of text.
 
-          MESSAGE 1 — Fiber confirmation (short, 1-2 sentences):
+          MESSAGE 1 — Fiber confirmation (1-3 sentences):
               "Great news — [address] supports Fiber service. A technician will need to
                visit to activate it and install the ONT device."
+
+              TECHNOLOGY MIGRATION ADDITION (only if handoff says customer is currently on
+              "Internet 100" or "Copper" service):
+              Append to MESSAGE 1: "This is an upgrade from your current Internet 100
+              (Copper) service — your existing modem is not compatible with Fiber, so
+              the technician will install a new ONT device."
 
           [blank line]
 

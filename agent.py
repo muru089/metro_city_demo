@@ -64,7 +64,7 @@ bound_t1 = functools.partial(T1_GetUpdateContact, conn=conn)
 bound_t1.__name__ = "T1_GetUpdateContact"
 bound_t1.__doc__  = (
     "Looks up a customer by their 5-digit Account ID. "
-    "Returns first_name, email, phone_number, and account status. "
+    "Returns first_name, email, plan_name, and account status. "
     "Input: account_id (integer)."
 )
 t1_tool = FunctionTool(bound_t1)
@@ -116,6 +116,9 @@ root_agent = Agent(
 
     Pick the right sub-agent and call it ONCE. Pass the full context in your call:
     always include "Account ID: [number]" and a summary of what the customer wants.
+    For moves_agent specifically: also include the customer's current plan_name from T1
+    (e.g., "currently on Internet 100" or "currently on Fiber 1 Gig") so it can detect
+    technology migrations.
 
     | Customer intent                                          | Sub-agent to call   |
     | :------------------------------------------------------- | :------------------ |

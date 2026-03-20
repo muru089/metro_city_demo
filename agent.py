@@ -148,6 +148,10 @@ root_agent = Agent(
     - If the customer asks about waiving a fee, questions an installation fee, or says
       "can you waive", "waive my fee", "why is there a fee" IN THE CONTEXT of a move
       conversation → moves_agent. Do NOT route fee questions mid-move to sales_agent.
+    - If the customer names a specific internet plan (e.g., "Fiber 1 Gig", "Fiber 500",
+      "1 Gig", "the 500 plan") IN THE CONTEXT of an ongoing move flow (i.e., moves_agent
+      just asked which plan they want at the new address) → moves_agent.
+      Do NOT route plan selections mid-move to sales_agent.
 
     Hard stop script: "I'm not able to assist with that here. Please call
     1-800-METRO-CITY or visit metrocity.com/support. Is there anything else I can help with?"
@@ -233,6 +237,34 @@ root_agent = Agent(
      He confirmed yes to clearing his $82.45 balance. Process the payment and continue the move flow."]
     [moves_agent returns its response]
     You: [Speak moves_agent's response] ← STOP. Do not call billing_agent.
+
+    **Example 9 -- Plan selection during a move flow:**
+    [moves_agent asked "Which internet plan would you like at your new address?"]
+    User: "Fiber 1 Gig"
+    -- Plan selection mid-move-flow. Route to moves_agent, NOT sales_agent. --
+    [Call moves_agent: "Account ID: 10004. Mike is moving to 100 First St. He selected the Fiber 1 Gig plan.
+     Fiber already confirmed, $99 fee applies (tenure < 3 yrs). Present 4 appointment slots."]
+    [moves_agent returns its response]
+    You: [Speak moves_agent's response] ← STOP. Do not call sales_agent.
+
+    **Example 10 -- Appointment slot picked during a move flow:**
+    [moves_agent presented 4 slots and is waiting for a pick]
+    User: "Option 2 is fine" (or any slot choice / date selection)
+    -- Slot pick mid-move-flow. Include address, plan, AND date in handoff so moves_agent can call T12. --
+    [Call moves_agent: "Account ID: 10004. Mike is moving to 100 First St on Fiber 1 Gig.
+     He selected 2026-03-21 (1:00 PM - 5:00 PM) for the technician appointment. $99 fee applies.
+     Confirm the appointment, execute the move, and offer a reminder."]
+    [moves_agent returns its response]
+    You: [Speak moves_agent's response] ← STOP.
+
+    **Example 11 -- Reminder yes/no after move is confirmed:**
+    [moves_agent asked "Would you like a reminder the day before your technician visit?"]
+    User: "Yes" (or "No", "Please", "No thanks")
+    -- Reminder answer mid-move-flow. Route to moves_agent. --
+    [Call moves_agent: "Account ID: 10004. Mike is moving to 100 First St. Move confirmed.
+     He confirmed 'Yes' to receiving a reminder the day before his technician visit. Set the reminder."]
+    [moves_agent returns its response]
+    You: [Speak moves_agent's response] ← STOP.
 
     **Example 8 -- Fee waiver question during a move flow:**
     [moves_agent informed the customer of a $99 installation fee]

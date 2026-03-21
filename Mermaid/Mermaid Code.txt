@@ -61,7 +61,7 @@ graph TD
         MD --> BRC["② BusinessRulesCritic<br>flash · no tools · independent LLM<br>Audits 8 business rules<br>Outputs: APPROVED or VIOLATION lines"]
         BRC --> ROE["③ RefinerOrExiter<br>flash-lite · no tools<br>APPROVED → pass draft unchanged<br>VIOLATION → rewrite flagged parts only<br>SIGNAL A/B/F fee text → delete entirely"]
 
-        ROE -->|"max_iterations=1<br>(one clean pass — no loop back)"| LC_OUT["Final Response → Customer"]
+        ROE -->|"max_iterations=2<br>(2nd pass only if violations found)"| LC_OUT["Final Response → Customer"]
     end
 
     subgraph RULES["8 Business Rules Audited by BusinessRulesCritic"]

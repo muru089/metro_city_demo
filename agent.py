@@ -55,7 +55,7 @@ from .A4_Scheduling_Agent import scheduling_agent
 # USE_LOOP_AGENT = False → single-agent moves_agent (CP1/CP2: debug mode)
 # Change ONLY this one line to switch between implementations.
 # =============================================================================
-USE_LOOP_AGENT = True
+USE_LOOP_AGENT = False
 
 if USE_LOOP_AGENT:
     from .Archive.A5_Move_Cancel_LoopAgent import move_cancel_loop as _moves_impl

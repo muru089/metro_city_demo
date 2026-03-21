@@ -816,14 +816,15 @@ NOTE ON LOOP EXIT:
 # =============================================================================
 # LOOP AGENT: MoveCancelComplianceLoop
 # Orchestrates the 3-agent loop. ADK runs sub_agents sequentially each iteration.
-# max_iterations=1: MoverDrafter drafts once → BusinessRulesCritic audits →
-# RefinerOrExiter fixes violations or passes through unchanged. One clean pass.
+# max_iterations=2: MoverDrafter drafts → BusinessRulesCritic audits →
+# RefinerOrExiter fixes violations or passes through unchanged.
+# If violations were found in iteration 1, a 2nd pass allows the critic to
+# re-verify the refined output before it reaches the customer.
 #
-# Why max_iterations=1 (not 2):
-#   With 2 iterations, MoverDrafter runs a 2nd time and sees its own Iteration 1
-#   response in the conversation history. It then treats that output as a customer
-#   message and produces a one-word self-response (e.g., "Yes."). One iteration
-#   avoids this entirely.
+# Known risk: if MoverDrafter fires again in iteration 2, it sees its own
+# iteration-1 output in history and may treat it as a customer message.
+# RefinerOrExiter is the final speaker each iteration, so the 2nd MoverDrafter
+# pass reads the refined response — monitor for self-response bugs if re-enabled.
 #
 # 3 LLM calls per customer turn (vs 1 for the single-agent A5):
 #   Turn overhead: ~3x more API calls, but the critic provides independent
@@ -832,5 +833,5 @@ NOTE ON LOOP EXIT:
 move_cancel_loop = LoopAgent(
     name="MoveCancelComplianceLoop",
     sub_agents=[mover_drafter, business_rules_critic, refiner_or_exiter],
-    max_iterations=1,
+    max_iterations=2,
 )

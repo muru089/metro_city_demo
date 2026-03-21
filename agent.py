@@ -47,7 +47,20 @@ from .A1_Service_Agent    import service_agent
 from .A2_Sales_Agent      import sales_agent
 from .A3_Billing_Agent    import billing_agent
 from .A4_Scheduling_Agent import scheduling_agent
-from .A5_Move_Cancel_Agent import moves_agent
+
+# =============================================================================
+# A5 IMPLEMENTATION TOGGLE
+# ------------------------------------------------------------------
+# USE_LOOP_AGENT = True  → 3-agent LoopAgent (CP3: self-reflection demo)
+# USE_LOOP_AGENT = False → single-agent moves_agent (CP1/CP2: debug mode)
+# Change ONLY this one line to switch between implementations.
+# =============================================================================
+USE_LOOP_AGENT = True
+
+if USE_LOOP_AGENT:
+    from .Archive.A5_Move_Cancel_LoopAgent import move_cancel_loop as _moves_impl
+else:
+    from .A5_Move_Cancel_Agent import moves_agent as _moves_impl
 
 # =============================================================================
 # IMPORT AND WIRE T1 -- THE AUTHENTICATION TOOL
@@ -84,7 +97,7 @@ root_agent = Agent(
         AgentTool(sales_agent),      # Domain: plans and upgrades
         AgentTool(billing_agent),    # Domain: payments and autopay
         AgentTool(scheduling_agent), # Domain: appointments and reminders
-        AgentTool(moves_agent),      # Squad: move + cancel with inline PRE-SEND CHECK
+        AgentTool(_moves_impl),      # Squad/Loop: move + cancel (toggled by USE_LOOP_AGENT)
     ],
 
     instruction="""

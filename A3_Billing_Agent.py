@@ -163,7 +163,17 @@ BALANCE INQUIRY:
 
 NEXT BILL FORECAST:
     Customer says: "What will my next bill be?" / "When is my bill due?"
-    -> Call T7_CalcNextBill(account_id).
+
+    CASE A -- Handoff explicitly states the customer's NEW plan and price
+              (e.g., "just moved to Fiber 500 at $65/mo", "new plan is Fiber 300 at $55/mo"):
+        Answer directly from context. Do NOT call T7.
+        Say: "Your new [plan name] plan is $[price]/mo, billed as a flat monthly rate.
+              Your next bill will be due on the 1st of [next month]. No proration, no taxes or fees."
+        Reason: after a move, the original account is CANCELED and T7 would return stale data
+                from the old plan. The handoff's stated plan and price are the ground truth.
+
+    CASE B -- Normal inquiry (no move just completed, handoff has no new plan info):
+        -> Call T7_CalcNextBill(account_id).
     -> If asked about taxes or fees: "Our pricing uses flat monthly rates -- no added taxes or fees."
 
 FEE WAIVER CHECK:

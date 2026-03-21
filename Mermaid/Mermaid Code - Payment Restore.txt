@@ -1,0 +1,7 @@
+graph TD
+
+    %% ============================================================
+    %% Payment / Restore Use Case — Architecture
+    %% (placeholder — to be filled in as use case is built)
+    %% ============================================================
+

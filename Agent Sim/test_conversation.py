@@ -145,17 +145,21 @@ from google.genai import types
 # USER_ID  = "test_10005"
 
 # ---------------------------------------------------------------------------
-# PERSONA 3 (ACTIVE): Account 10004 (Mike) -- Archetype C: Debtor / Billing Gate
+# PERSONA 6 (ACTIVE): Account 10005 (Emily) -- Archetype F: Double Dipper
+# ---------------------------------------------------------------------------
+# Balance: $0 | Tenure: 3.1yr (Rule A PASS) | Autopay: ON (Rule B PASS)
+# waivers_used_12m: 1 (Rule C FAIL -- waiver already used in last 12 months)
+# Expected: $99 fee denied with specific reason: prior waiver used recently
+# Moving to: 700 Seventh St (A17) -> Fiber, Vacant -> 4-turn, $99 fee
 # ---------------------------------------------------------------------------
 TURNS = [
-    (1, "I want to move to 100 First St. Cancel if fiber not available. Waive fees. Account 10004."),
-    (2, "Sure"),
-    (3, "Fiber 1 Gig"),
-    (4, "Option 2 is fine"),
-    (5, "Yes"),
+    (1, "Hi, I'd like to move to 700 Seventh St. Account 10005."),
+    (2, "Fiber 300"),
+    (3, "Option 1 is fine"),
+    (4, "Yes"),
 ]
 APP_NAME = "metro_test"
-USER_ID  = "test_10004"
+USER_ID  = "test_10005"
 
 SEP = "=" * 70
 

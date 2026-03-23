@@ -25,10 +25,41 @@ import sqlite3
 import functools
 from google.adk.agents import Agent
 from google.adk.tools.agent_tool import AgentTool
+from google.adk.tools.base_tool import BaseTool
+from google.adk.agents.callback_context import CallbackContext
+from typing import Any
 
 from .DA2_Billing_Agent     import da2_billing_agent
 from .DA3_Scheduling_Agent  import da3_scheduling_agent
 from .DA4_Execute_Move_Agent import da4_execute_move_agent
+
+# ---------------------------------------------------------------------------
+# Demo callbacks — surface SA1's inner DA agent calls in the terminal
+# ---------------------------------------------------------------------------
+_DA_LABELS = {
+    "DA2_BillingAgent":    "DA2  Billing Agent   ",
+    "DA3_SchedulingAgent": "DA3  Scheduling Agent",
+    "DA4_ExecuteMoveAgent":"DA4  Execute Agent   ",
+}
+_SEP = "─" * 64
+
+def _before_tool(tool: BaseTool, args: dict[str, Any], tool_context: CallbackContext):
+    label = _DA_LABELS.get(tool.name, tool.name)
+    req   = str(args.get("request", args))[:120].replace("\n", " ")
+    print(f"\n{_SEP}")
+    print(f"  SA1 → {label}")
+    print(f"  REQ: {req}...")
+    print(_SEP)
+    return None   # None = let the call proceed normally
+
+def _after_tool(tool: BaseTool, args: dict[str, Any], tool_context: CallbackContext, tool_response: Any):
+    label = _DA_LABELS.get(tool.name, tool.name)
+    resp  = str(tool_response)[:160].replace("\n", " ")
+    print(f"\n{_SEP}")
+    print(f"  SA1 ← {label}")
+    print(f"  RSP: {resp}...")
+    print(_SEP)
+    return None   # None = pass result through unchanged
 
 
 sa1_moves_supervisor = Agent(
@@ -39,6 +70,8 @@ sa1_moves_supervisor = Agent(
         AgentTool(da3_scheduling_agent),   # Appointments, reminder
         AgentTool(da4_execute_move_agent), # Address check (MODE A), execute move (MODE B), cancel (MODE C)
     ],
+    before_tool_callback=_before_tool,
+    after_tool_callback=_after_tool,
     instruction="""
 You are the Move & Cancel Supervisor for Metro City Internet.
 

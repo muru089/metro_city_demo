@@ -55,7 +55,7 @@ t4_tool = create_db_tool(
 
 da1_sales_agent = Agent(
     name="DA1_SalesAgent",
-    model="gemini-2.5-flash-lite",
+    model="gemini-3-flash-preview",
     tools=[t2_tool, t4_tool],
     instruction="""
 You are the Sales & Serviceability Specialist for Metro City Internet.

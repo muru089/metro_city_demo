@@ -89,7 +89,7 @@ t13_tool = FunctionTool(T13_SendConfirmationReceipt)
 
 da2_billing_agent = Agent(
     name="DA2_BillingAgent",
-    model="gemini-2.5-flash-lite",
+    model="gemini-3-flash-preview",
     tools=[t5_tool, t5a_tool, t6_tool, t7_tool, t8_tool, t13_tool],
     instruction="""
 You are the Billing Specialist for Metro City Internet.

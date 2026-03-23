@@ -68,7 +68,7 @@ t11_tool = create_db_tool(
 
 da3_scheduling_agent = Agent(
     name="DA3_SchedulingAgent",
-    model="gemini-2.5-flash-lite",
+    model="gemini-3-flash-preview",
     tools=[t9_tool, t10_tool, t11_tool],
     instruction="""
 You are the Scheduling Specialist for Metro City Internet.

@@ -12,10 +12,10 @@ graph TD
 
         U --> T1["T1: Get/Update Contact<br>(Direct Tool — on Uber Agent)"]
 
-        U --> SA["SALES AGENT<br>A2 · flash-lite<br>Serviceability · Plans · Upgrades"]
-        U --> B["BILLING AGENT<br>A3 · flash-lite<br>Payments · Autopay · Next Bill"]
-        U --> SCH["SCHEDULING AGENT<br>A4 · flash-lite<br>Appointments · Reschedule"]
-        U --> MS["MOVE SUPERVISOR<br>NEW · flash<br>Macro State Machine<br>Yield & Resume Orchestrator<br>No tools · Reasoning only"]
+        U --> SA["DA1_Sales_Agent<br>flash-lite<br>Serviceability · Plans · Upgrades"]
+        U --> B["DA2_Billing_Agent<br>flash-lite<br>Payments · Autopay · Next Bill"]
+        U --> SCH["DA3_Scheduling_Agent<br>flash-lite<br>Appointments · Reschedule"]
+        U --> MS["SA1_Moves_Supervisor<br>flash<br>Macro State Machine<br>Yield & Resume Orchestrator<br>No tools · Reasoning only"]
 
         SA --> T2["T2: Fiber Check Serviceability"]
         SA --> T4["T4: Max Speed Plan"]
@@ -31,11 +31,11 @@ graph TD
         SCH --> T10["T10: Resched Appt"]
         SCH --> T11a["T11: Set Reminder"]
 
-        MS --> B2["BILLING AGENT<br>A3 · shared<br>Balance Gate + Fee Waiver"]
-        MS --> SA2["SALES AGENT<br>A2 · shared<br>Plan Selection"]
-        MS --> SCH2["SCHEDULING AGENT<br>A4 · shared<br>Appointment + Reminder"]
+        MS --> B2["DA2_Billing_Agent<br>shared<br>Balance Gate + Fee Waiver"]
+        MS --> SA2["DA1_Sales_Agent<br>shared<br>Plan Selection"]
+        MS --> SCH2["DA3_Scheduling_Agent<br>shared<br>Appointment + Reminder"]
 
-        subgraph MA_GRP["MOVES AGENT  ★ THIN ★  —  A5 · flash-lite"]
+        subgraph MA_GRP["DA4_Execute_Move_Agent  ★ Squad ★  —  flash-lite"]
             direction TB
             MA["Equipment Logic + Execute only"]
             MA --> T3["T3: Equipment Logic<br>DB lookup: Fiber/Copper<br>Vacant/Occupied · addr_id"]
@@ -99,7 +99,7 @@ graph TD
     subgraph TOOLS["DIAGRAM 3 — Tool Ownership: Single Source of Truth (no duplication)"]
         direction LR
 
-        subgraph TB1["billing_agent owns"]
+        subgraph TB1["DA2_Billing_Agent owns"]
             direction TB
             TB1A["T5: Pay Bill"]
             TB1B["T5a: Get Balance"]
@@ -109,21 +109,21 @@ graph TD
             TB1F["T13: Send Receipt (billing)"]
         end
 
-        subgraph TB2["moves_agent owns"]
+        subgraph TB2["DA4_Execute_Move_Agent owns"]
             direction TB
             TB2A["T3: Equipment Logic"]
             TB2B["T12: Exec Move/Cancel"]
             TB2C["T13: Send Receipt (move)"]
         end
 
-        subgraph TB3["scheduling_agent owns"]
+        subgraph TB3["DA3_Scheduling_Agent owns"]
             direction TB
             TB3A["T9: Book Appt"]
             TB3B["T10: Resched Appt"]
             TB3C["T11: Set Reminder"]
         end
 
-        subgraph TB4["sales_agent owns"]
+        subgraph TB4["DA1_Sales_Agent owns"]
             direction TB
             TB4A["T2: Fiber Check Serviceability"]
             TB4B["T4: Max Speed Plan"]

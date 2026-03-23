@@ -145,16 +145,17 @@ from google.genai import types
 # USER_ID  = "test_10005"
 
 # ---------------------------------------------------------------------------
-# PERSONA 6 (ACTIVE): Account 10005 (Emily) -- Archetype F: Double Dipper
+# PERSONA 3 (ACTIVE): Account 10004 (Mike) -- Archetype C: Debtor / Billing Gate
 # ---------------------------------------------------------------------------
 TURNS = [
-    (1, "Hi, I'd like to move to 700 Seventh St. Account 10005."),
-    (2, "Fiber 300"),
-    (3, "Option 1 is fine"),
-    (4, "Yes"),
+    (1, "I want to move to 100 First St. Cancel if fiber not available. Waive fees. Account 10004."),
+    (2, "Sure"),
+    (3, "Fiber 1 Gig"),
+    (4, "Option 2 is fine"),
+    (5, "Yes"),
 ]
 APP_NAME = "metro_test"
-USER_ID  = "test_10005"
+USER_ID  = "test_10004"
 
 SEP = "=" * 70
 
@@ -224,7 +225,7 @@ async def run_test():
         print(f"\nTURN {turn_num} -> AGENT:\n{agent_response.strip() or '(no text response)'}")
 
     # -----------------------------------------------------------------------
-    # Summary
+    # Summary + Verification Table
     # -----------------------------------------------------------------------
     print(f"\n{SEP}")
     print("SUMMARY")
@@ -244,7 +245,7 @@ async def run_test():
             for k, v in call["args"].items():
                 print(f"    {k}: {v}")
     else:
-        print("  NOT called")
+        print("  NOT called (may be inside SA1->DA4 chain — check DB below)")
 
     print(f"\nErrors / Exceptions:")
     if errors:
@@ -252,6 +253,62 @@ async def run_test():
             print(f"  {e}")
     else:
         print("  None")
+
+    # -----------------------------------------------------------------------
+    # DB Verification Table (always printed after every run)
+    # Shows: original account status, new account at destination, address status
+    # -----------------------------------------------------------------------
+    print(f"\n{SEP}")
+    print("DB VERIFICATION")
+    print(SEP)
+    try:
+        import sqlite3 as _sqlite3
+        _db = _sqlite3.connect(
+            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "metro_city.db")
+        )
+        _cur = _db.cursor()
+
+        # All accounts touched in this run (original + any new accounts > 10020)
+        _ids = [uid for _, uid in TURNS[:1]]  # extract account_id from first turn if embedded
+        # Pull account_id from TURNS[0] message if present
+        import re as _re
+        _match = _re.search(r'\b(1000\d|1001\d|1002\d)\b', TURNS[0][1])
+        _acct  = int(_match.group(1)) if _match else None
+
+        if _acct:
+            print(f"\nOriginal account {_acct}:")
+            _cur.execute(
+                "SELECT account_id, first_name, address_id, plan_name, status, "
+                "install_date, install_slot, start_date, end_date "
+                "FROM customer_accounts WHERE account_id=?", (_acct,)
+            )
+            _row = _cur.fetchone()
+            if _row:
+                _cols = ["account_id","first_name","address_id","plan_name","status",
+                         "install_date","install_slot","start_date","end_date"]
+                for _c, _v in zip(_cols, _row):
+                    print(f"  {_c:15s}: {_v}")
+
+        print(f"\nNew accounts created (account_id > 10020):")
+        _cur.execute(
+            "SELECT account_id, first_name, address_id, plan_name, status, "
+            "install_date, install_slot, start_date, end_date "
+            "FROM customer_accounts WHERE account_id > 10020"
+        )
+        _rows = _cur.fetchall()
+        if _rows:
+            _cols = ["account_id","first_name","address_id","plan_name","status",
+                     "install_date","install_slot","start_date","end_date"]
+            for _row in _rows:
+                for _c, _v in zip(_cols, _row):
+                    print(f"  {_c:15s}: {_v}")
+                print()
+        else:
+            print("  (none — T12 may not have been called or DB was not written)")
+
+        _db.close()
+    except Exception as _e:
+        print(f"  DB check failed: {_e}")
 
     print(f"\n{SEP}\n")
 

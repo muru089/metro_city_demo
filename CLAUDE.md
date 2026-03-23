@@ -22,28 +22,47 @@ A **multi-agent demo** for a fictional metro city telecom company. Simulates a V
 ## System Architecture
 
 **Framework:** Google ADK (`google.adk.agents.Agent`, `google.adk.tools.FunctionTool`, `google.adk.tools.agent_tool.AgentTool`)
-**LLM:** `gemini-2.5-flash` for root_agent AND moves_agent; `gemini-2.5-flash-lite` for all other domain sub-agents
+**LLM:** `gemini-2.5-flash` for root_agent AND SA1_MovesSupervisor AND DA4_ExecuteMoveAgent; `gemini-2.5-flash-lite` for DA1, DA2, DA3
 **Database:** SQLite (`metro_city.db`)
 **DB Injection Pattern:** `functools.partial` used to inject `conn` into all DB tools, hiding it from the agent. Helper: `create_db_tool(fn, conn)` defined in each agent file.
-**Exception:** T13_SendConfirmationReceipt opens its own DB connection internally -- do NOT wrap with `create_db_tool`.
+**Exception:** T13_SendConfirmationReceipt opens its own DB connection internally — do NOT wrap with `create_db_tool`.
 **Server Launch:** Run `adk web` from `c:\Muru_Workspace` (the PARENT of metro_city_demo), NOT from inside the project folder.
 
 ```
-root_agent  (agent.py)                               gemini-2.5-flash
-  +-- T1_GetUpdateContact  (direct tool)
-  +-- service_agent        (A1_Service_Agent.py)    via AgentTool
-  +-- sales_agent          (A2_Sales_Agent.py)       via AgentTool
-  +-- billing_agent        (A3_Billing_Agent.py)     via AgentTool
-  +-- scheduling_agent     (A4_Scheduling_Agent.py)  via AgentTool
-  +-- moves_agent          (A5_Move_Cancel_Agent.py) via AgentTool ← LIVE
-        Single agent with inline 7-rule PRE-SEND CHECK self-review
+root_agent         (agent.py)                          gemini-2.5-flash   ← Uber Agent
+  +-- T1_GetUpdateContact    (direct tool: auth)
+  +-- DA1_SalesAgent         (DA1_Sales_Agent.py)      gemini-2.5-flash-lite  via AgentTool
+  +-- DA2_BillingAgent       (DA2_Billing_Agent.py)    gemini-2.5-flash-lite  via AgentTool
+  +-- DA3_SchedulingAgent    (DA3_Scheduling_Agent.py) gemini-2.5-flash-lite  via AgentTool
+  +-- SA1_MovesSupervisor    (SA1_Moves_Supervisor.py) gemini-2.5-flash       via AgentTool ← Supervisor
+        +-- DA2_BillingAgent      (balance, payment, fee waiver)  via AgentTool
+        +-- DA3_SchedulingAgent   (appointments, reminder)         via AgentTool
+        +-- DA4_ExecuteMoveAgent  (DA4_Execute_Move_Agent.py)      gemini-2.5-flash  via AgentTool ← Squad
 
-Archive/A5_Move_Cancel_LoopAgent.py                  (archived — LoopAgent self-reflection reference)
+Archive/A1_Service_Agent.py        (archived — CP3 reference)
+Archive/A2_Sales_Agent.py          (archived — CP3 reference)
+Archive/A3_Billing_Agent.py        (archived — CP3 reference)
+Archive/A4_Scheduling_Agent.py     (archived — CP3 reference)
+Archive/A5_Move_Cancel_Agent.py    (archived — CP3 reference: monolith Squad with inline PRE-SEND CHECK)
+Archive/A5_Move_Cancel_LoopAgent.py (archived — CP3 reference: LoopAgent self-reflection pattern)
 ```
+
+**3-Tier Design:**
+| Tier | Agent | Responsibility |
+|---|---|---|
+| Uber | root_agent | Auth, input safety (PII/injection/toxicity), disambiguation, routing |
+| Supervisor | SA1_MovesSupervisor | 7-state macro state machine for moves/cancels. No direct tools. Yields to DAs. |
+| Domain | DA1, DA2, DA3 | Narrow specialists. Own their tool sets. Called by root_agent OR SA1. |
+| Squad | DA4_ExecuteMoveAgent | Fire-and-return. Executes T3→T12→T13 chain. Called by SA1 only. |
+
+**Guardrail placement:**
+- **Layer 1 (Input):** Uber Agent only — PII, prompt injection, toxicity, out-of-scope
+- **Layer 2 (Logic):** Each domain agent — domain-specific rules (balance gate, Copper constraint, card security, consent)
+- **Layer 3 (Output):** Uber Agent only — variable exposure, contradictions, verbosity
 
 ---
 
-## Database Schema (3 Tables -- from z_reset_world.py)
+## Database Schema (3 Tables — from z_reset_world.py)
 
 ```sql
 CREATE TABLE product_catalog (
@@ -101,7 +120,7 @@ CREATE TABLE customer_accounts (
 
 ## Address Universe (20 Addresses)
 
-### Group A -- Occupied (Ave addresses, A01-A10)
+### Group A — Occupied (Ave addresses, A01-A10)
 | addr_id | Street           | Tech   | Max Speed | Equipment | Status   |
 |---------|------------------|--------|-----------|-----------|----------|
 | A01     | 100 First Ave    | Fiber  | 1000      | ONT       | Occupied |
@@ -115,7 +134,7 @@ CREATE TABLE customer_accounts (
 | A09     | 900 Ninth Ave    | Copper | 100       | Modem     | Occupied |
 | A10     | 1000 Tenth Ave   | Fiber  | 1000      | ONT       | Occupied |
 
-### Group B -- Vacant (St addresses, A11-A20)
+### Group B — Vacant (St addresses, A11-A20)
 | addr_id | Street          | Tech   | Max Speed | Equipment | Status |
 |---------|-----------------|--------|-----------|-----------|--------|
 | A11     | 100 First St    | Fiber  | 1000      | ONT       | Vacant |
@@ -131,7 +150,7 @@ CREATE TABLE customer_accounts (
 
 ---
 
-## Demo Accounts -- Cheat Sheet (10 Active Personas)
+## Demo Accounts — Cheat Sheet (10 Active Personas)
 
 | ID    | Name    | Addr | Plan         | Tenure | Autopay | Balance | Archetype                               |
 |-------|---------|------|--------------|--------|---------|---------|-----------------------------------------|
@@ -153,8 +172,8 @@ CREATE TABLE customer_accounts (
 ## Authentication Rules
 
 1. **Auth Required:** Before any account action, collect the 5-digit Account ID.
-2. **Unrecognized ID:** Re-prompt once ("I didn't find that account -- double-check and try again."). On second failure, pivot to general help (do NOT keep re-prompting).
-3. **CANCELED account:** Inform the customer the account is no longer active. Do NOT attempt reactivation. Offer new account setup via sales_agent.
+2. **Unrecognized ID:** Re-prompt once ("I didn't find that account — double-check and try again."). On second failure, pivot to general help (do NOT keep re-prompting).
+3. **CANCELED account:** Inform the customer the account is no longer active. Do NOT attempt reactivation. Offer new account setup via da1_sales_agent.
 4. **Tenure-Aware Greeting:** After auth, check `tenure_years`:
    - >= 3 years: use loyalty script ("Thank you for being a valued customer for X years...")
    - < 3 years: use standard greeting
@@ -162,138 +181,155 @@ CREATE TABLE customer_accounts (
 
 ---
 
-## Supervisor / Router (agent.py -- `root_agent`)
+## Uber Agent / Router (agent.py — `root_agent`)
 
-**Direct tool:** T1_GetUpdateContact (for contact info read/update without sub-agent handoff)
+**Direct tool:** T1_GetUpdateContact (auth + contact lookup before routing)
 
 **Routing table:**
-| User says...                                              | Route to         |
-|-----------------------------------------------------------|------------------|
-| "moving", "new address", "transfer service", "cancel"     | move_cancel_loop      |
-| "serviceability", "fiber available", "coverage"           | service_agent    |
-| "upgrade", "downgrade", "change plan", "new customer"     | sales_agent      |
-| "pay bill", "balance", "autopay", "next bill", "invoice"  | billing_agent    |
-| "schedule", "appointment", "reschedule", "reminder"       | scheduling_agent |
+| User says...                                              | Route to                |
+|-----------------------------------------------------------|-------------------------|
+| "moving", "new address", "transfer service", "cancel"     | sa1_moves_supervisor    |
+| "serviceability", "fiber available", "coverage"           | da1_sales_agent         |
+| "upgrade", "downgrade", "change plan", "new customer"     | da1_sales_agent         |
+| "pay bill", "balance", "autopay", "next bill", "invoice"  | da2_billing_agent       |
+| "schedule", "appointment", "reschedule", "reminder"       | da3_scheduling_agent    |
 
 **Disambiguation rules:**
-- "Cancel" always routes to move_cancel_loop (cancellation flow)
-- "Change" -- clarify: plan change (sales_agent) vs. address change (move_cancel_loop)
-- Ambiguous intent: ask one clarifying question; do NOT guess
-- Date/slot follow-ups mid-move (e.g. "March 8 doesn't work") → move_cancel_loop, NOT scheduling_agent
-- Affirmative responses mid-move ("Sure", "Yes", "OK") → move_cancel_loop, NOT billing_agent
-- Fee waiver questions mid-move → move_cancel_loop, NOT sales_agent
-- "Cancel unless fiber available" → move_cancel_loop (multi-intent: move_cancel_loop handles both move and cancel outcomes)
+- "Cancel" alone → ask: "Are you canceling your service, or a technician appointment?"
+- "Change" alone → ask: "Are you changing your plan, or your address?"
+- Affirmative responses mid-move ("Sure", "Yes", "OK") → sa1_moves_supervisor, NOT da2_billing_agent
+- Date/slot follow-ups mid-move → sa1_moves_supervisor, NOT da3_scheduling_agent
+- Fee waiver questions mid-move → sa1_moves_supervisor, NOT da1_sales_agent
+- Plan selections mid-move → sa1_moves_supervisor, NOT da1_sales_agent
+- "Cancel unless fiber available" → sa1_moves_supervisor (handles both outcomes)
+- New card request during an active move → sa1_moves_supervisor (handles card security script)
+- Standalone card update (no active move) → ESCALATION
+
+**SA1 handoff requirement:** root_agent MUST include the full conversation transcript in every sa1_moves_supervisor call so SA1 can reconstruct its state (Approach B — ephemeral state via history reconstruction).
 
 ---
 
 ## Agent Definitions
 
-### A1 -- service_agent (A1_Service_Agent.py)
+### DA1 — da1_sales_agent (DA1_Sales_Agent.py)
 
-**Purpose:** Check serviceability (tech type + max speed) at a given address.
-**Tools:** T2_FiberCheckServiceability
+**Purpose:** Check serviceability at an address; present and confirm internet plans.
+**Absorbs:** Former A1 (serviceability) and A2 (sales) — no tool duplication.
+**Tools:** T2_FiberCheckServiceability, T4_FindMaxSpeedPlan
+**Model:** gemini-2.5-flash-lite
 
-**Key rules:**
-- Takes `address_id` (e.g., "A01"), NOT a street string -- agent must look up or ask for the address ID
-- **Copper Constraint:** If address max_tech_type is Copper, do NOT offer Fiber plans
-- **Out of Footprint:** If address_id not found in DB, inform customer we do not serve that area
-- **Hard Stop:** Troubleshooting / repair requests are out of scope -- use standard handoff phrase
-
----
-
-### A2 -- sales_agent (A2_Sales_Agent.py)
-
-**Purpose:** Present plans, handle upgrades, downgrades, lateral moves, new customer signups.
-**Tools:** T1_GetUpdateContact, T2_FiberCheckServiceability, T4_FindMaxSpeedPlan, T8_CheckFeeWaiver
-
-**Scenarios:**
-- **Upgrade:** Confirm new plan, price delta, effective next billing cycle
-- **Downgrade:** Confirm customer understands speed reduction; no fee
-- **Lateral:** Same speed tier, confirm price difference
-- **New customer (unauthenticated):** Use T2 to check address serviceability; present plans without Account ID
-- **Discount/Promotion pivot:** Customer asks for a discount or promotion -- do NOT hard-stop. Run T8_CheckFeeWaiver. If eligible apply; if not, explain specific failing reason.
+**State machine:**
+- STATE 1: Identify address_id (A01–A20 format)
+- STATE 2: Check serviceability via T2 — Fiber or Copper
+- STATE 3: Present plans via T4 — Fiber plans only if Fiber confirmed
 
 **Key rules:**
-- Plan changes effective next billing cycle (no proration, no credits)
+- T2 takes `address_id` (e.g., "A01"), NOT a street string
+- **Copper Constraint:** Never offer Fiber plans at a Copper-only address
+- T4 must never be called without T2 succeeding first
+- Plan changes effective next billing cycle — no proration, no credits
 - No fee for plan changes
-- Copper Constraint applies: never offer Fiber plans at Copper-only addresses
 
 ---
 
-### A3 -- billing_agent (A3_Billing_Agent.py)
+### DA2 — da2_billing_agent (DA2_Billing_Agent.py)
 
-**Purpose:** Handle payments, autopay, balance inquiries, next bill forecasts.
+**Purpose:** Handle all billing operations.
 **Tools:** T5_PayBill, T5a_GetBalance, T6_AutopayToggle, T7_CalcNextBill, T8_CheckFeeWaiver, T13_SendConfirmationReceipt
+**Model:** gemini-2.5-flash-lite
+**Called by:** root_agent (standalone billing) AND SA1_MovesSupervisor (balance check, payment, fee waiver during move flow)
+
+**Tasks (one per invocation):**
+- BALANCE_CHECK → T5a
+- PAYMENT → card security check → T5 → T13
+- FEE_WAIVER → T8 (result is ground truth — never infer from context)
+- NEXT_BILL → T7 (CASE B) OR from context (CASE A — post-move, do NOT call T7)
+- AUTOPAY → T6
 
 **Key rules:**
-- **Card Security HARD STOP:** Cannot update, add, or change card on file. Script: "For security, card updates must be done through our secure self-service portal or by visiting a store. I can only process payments using the card already on file."
-- **Payment only uses card on file** -- no alternative payment methods
-- **Ambiguous consent:** "I guess" / "maybe" / "sure I suppose" -- require explicit "Yes" or "No" before any charge
-- **Continuity Handoff:** After payment triggered by a Move flow, MUST ask: "Your balance is now cleared. Would you like to proceed with your move?"
-- **Next bill:** Due 1st of next month. Flat rate only (no proration)
-- **Autopay toggle:** T6 requires explicit "on" or "off" action; if ambiguous, confirm before acting
+- **Card Security HARD STOP:** Cannot accept new card details. Only card on file.
+- **Consent Gate:** "I guess" / "maybe" = NOT consent. Only explicit "Yes" / "Go ahead".
+- **T8 ground truth:** Fee waiver result comes ONLY from T8 output — never infer.
+- **T7 vs Context:** After a move, old account is CANCELED — T7 returns stale data. Use CASE A (from context) for post-move billing questions.
 
 ---
 
-### A4 -- scheduling_agent (A4_Scheduling_Agent.py)
+### DA3 — da3_scheduling_agent (DA3_Scheduling_Agent.py)
 
-**Purpose:** Book and reschedule technician installation appointments; set day-before reminders.
+**Purpose:** Book and manage technician installation appointments; set reminders.
 **Tools:** T9_BookAppt, T10_ReschedAppt, T11_SetReminder
+**Model:** gemini-2.5-flash-lite
+**Called by:** root_agent (standalone scheduling) AND SA1_MovesSupervisor (appointments + reminder during move flow)
+
+**Tasks (one per invocation):**
+- LIST_SLOTS → T9 (no date) → exactly 4 slots
+- CONFIRM_DATE → T9 (date_str)
+- RESCHEDULE → T10
+- SET_REMINDER → T11
 
 **Key rules:**
-- **30-day booking window:** Cannot book more than 30 days from today
-- **Rule of 4:** When no date specified, always present exactly 4 slots (2 days x AM + PM)
-- **AM/PM only:** 8AM-12PM = AM; 1PM-5PM = PM. No specific times beyond this.
-- **Repair Hard Stop:** Installation only. Repair/outage requests are out of scope.
-- **Reminder:** T11 sets notification at 10:00 AM the day before install date
+- Rule of 4: always exactly 4 slots when listing
+- 30-day max window; no same-day booking
+- AM/PM only — never confirm specific times
+- Repair scheduling is out of scope
 
 ---
 
-### A5 -- moves_agent (A5_Move_Cancel_Agent.py)
+### SA1 — sa1_moves_supervisor (SA1_Moves_Supervisor.py)
 
-**Purpose:** Execute service moves to a new address and service cancellations.
-**Implementation:** Single Squad Agent with inline 7-rule PRE-SEND CHECK self-review. `Archive/A5_Move_Cancel_LoopAgent.py` is the LoopAgent pattern reference (archived — too many LLM calls for active debugging).
-**Tools:** T5a_GetBalance, T5_PayBill, T3_EquipmentLogic, T8_CheckFeeWaiver, T9_BookAppt, T12_ExecuteMoveCancel, T11_SetReminder, T13_SendConfirmationReceipt
+**Purpose:** Macro state machine for service moves and cancellations.
+**Tools:** AgentTool(da2_billing_agent), AgentTool(da3_scheduling_agent), AgentTool(da4_execute_move_agent)
+**Model:** gemini-2.5-flash (NOT flash-lite — multi-tool chains, avoid Part(text=None) bug)
+**Has NO direct tools** — all operations delegated to domain agents.
 
-**State Machine:** STATE 0 (Init + Resume Detection) → STATE 1 (Billing Gate) → STATE 2 (Address Check) → STATE 3A/3B (Move or Cancel Flow) → STATE 4 (Execute)
+**State reconstruction:** AgentTool creates a fresh InMemorySession per invocation. root_agent passes FULL conversation transcript in every handoff so SA1 can self-determine its state (Approach B).
 
-**STATE 0 -- Resume Detection (HANDOFF SIGNALS):** AgentTool creates a fresh InMemorySession per invocation, so tool-call history is never available. Resume detection is text-based, reading the supervisor's handoff message. Signals are checked in priority order (D first):
+**HANDOFF SIGNALS (checked in priority order E → D → A → B → C → F):**
+- **SIGNAL E:** Move/cancel executed; customer responding to reminder question → call DA3 set reminder or close
+- **SIGNAL D:** Slot selected → call DA4 execute move (MODE B). action="MOVE" always.
+- **SIGNAL A:** Plan selected, no appointment → call DA3 list slots (4 slots), HARD STOP
+- **SIGNAL B:** Fee result known, no plan → ask plan question, HARD STOP
+- **SIGNAL C:** Customer consented to payment → DA2 pay → DA4 addr check → DA2 fee check (chain in one turn)
+- **SIGNAL F:** Cancel intent, no address → CANCEL FLOW
 
-**Signals (checked in priority order):**
-- **SIGNAL D:** Handoff contains explicit slot pick (date or "Option N") → execute move (T9 confirm + T3 silent + T12 MOVE + T13 receipt) in one response
-- **SIGNAL E:** Handoff mentions "reminder" → call T11 if affirmative, close conversation
-- **SIGNAL C:** Handoff says customer consented to payment → T5_PayBill + T3 + T8 + fiber/fee result + plan question in one response
-- **SIGNAL A:** Handoff says plan was selected, no date → T9 (no date), present 4 slots, HARD STOP
-- **SIGNAL B:** Handoff confirms fiber/fee, no plan, no date → ask plan question, HARD STOP
+**Move Flow (7 states):**
+1. Balance Gate — DA2 balance check. Block if > $0.
+2. Address Check — DA4 MODE A. Validates Vacant/Occupied/Not-Found/Same.
+3. Fee Check — DA2 fee waiver. $0 or $99 with specific reason.
+4. Plan Selection — Present from catalog (no DA1 needed). Wait for explicit plan.
+5. Appointment — DA3 list 4 slots. Wait for selection.
+5B. Confirm Date — DA3 confirm chosen date.
+6. Execute — DA4 MODE B (T3 → T12 → T13). action="MOVE" always.
+7. Reminder — DA3 set reminder.
 
-**CRITICAL — SIGNAL D action must use action="MOVE" always.** "Cancel if fiber not available" from the original user request must NEVER bleed into SIGNAL D. Reaching SIGNAL D means fiber was confirmed and this is a MOVE. The cancel path was evaluated in STATE 2.
+**Cancel Flow:** Balance Gate → Confirm explicit YES → DA4 MODE C (T12 → T13).
 
-**Move Flow (6 steps in order):**
-1. **Balance Gate:** Call T5a_GetBalance. If pending_balance > 0, offer T5_PayBill. Cannot proceed until balance = $0.
-2. **Destination Check:** Call T3_EquipmentLogic(street_address). T3 returns tech_type ("Fiber"/"Copper"), install_type, and addr_id. Validates Vacant/Occupied/Not-Found.
-3. **Fee Check:** Call T8_CheckFeeWaiver. Inform customer of $0 (waived) or $99 fee with specific failing reason(s).
-4. **Plan Selection:** Offer "Fiber 1 Gig at $80/mo" as default. Customer may request full plan table. chosen_plan MUST be confirmed before scheduling.
-5. **Appointment:** Call T9_BookAppt() (no date) → present 4 slots. Call T9_BookAppt(date_str) to confirm chosen date.
-6. **Execute + Confirm:** T12_ExecuteMoveCancel(action="MOVE", new_address_id=addr_id_from_T3, new_plan_name=chosen_plan, effective_date=T9_date). Then T13_SendConfirmationReceipt; offer T11_SetReminder.
+**CRITICAL:** action="MOVE" at SIGNAL D regardless of any earlier "cancel if fiber not available" language. Cancel condition is evaluated in STATE 2 only. Reaching STATE 6 means fiber was confirmed and the customer chose a plan.
 
-**Cancel Flow:**
-1. **Balance Gate:** Balance must be $0 first.
-2. **Confirm Intent:** Explicit YES required before proceeding.
-3. **Execute:** T12_ExecuteMoveCancel(action="CANCEL"). Then T13_SendConfirmationReceipt.
-
-**Self-Reflection:** BusinessRulesCritic audits 7 rules (Balance Gate, Explicit Consent, Fee Waiver Integrity, Address Check Before Order, Plan Confirmed Before Scheduling, No Internal Variable Exposure, No Premature Move Confirmation). Violations are rewritten by RefinerOrExiter before the customer sees the response.
-
-**Address Validation Traps:**
-- **Same-address trap:** New address = current address: "You are already at that address."
-- **Occupied trap:** Destination status = "Occupied": "That address is already in service."
-- **Out-of-footprint:** Address ID not found: "We don't serve that area."
-
-**Technology Migration Rule:**
-- Moving from Copper (Modem) to Fiber (ONT): notify customer that their Copper modem is not compatible and a technician will install a new ONT device.
+**Technology Migration Rule:** Copper-to-Fiber move → notify customer that Copper modem is incompatible and a technician will install a new ONT device.
 
 ---
 
-## Tool Reference (T1-T13)
+### DA4 — da4_execute_move_agent (DA4_Execute_Move_Agent.py)
+
+**Purpose:** Squad agent. Address validation and move/cancel execution.
+**Tools:** T3_EquipmentLogic, T12_ExecuteMoveCancel, T13_SendConfirmationReceipt
+**Model:** gemini-2.5-flash (NOT flash-lite — multi-tool chain)
+**Called by:** SA1_MovesSupervisor only.
+
+**Modes (triggered by verb in message):**
+- **MODE A** ("check address") — T3 only. Read-only. T12 never called in MODE A.
+- **MODE B** ("execute move") — T3 → T12(action="MOVE") → T13. T3 must succeed before T12.
+- **MODE C** ("execute cancel") — T12(action="CANCEL") → T13.
+
+**Key rules:**
+- Always strip trailing punctuation (.,!?;:) from street strings before passing to T3
+- T3 gate: T12 must NEVER be called if T3 returned an error (MODE B)
+- action="MOVE" in MODE B always. action="CANCEL" in MODE C always. Never swap.
+
+---
+
+## Tool Reference (T1–T13)
 
 | Tool | File                              | Signature                                         | Purpose                                    |
 |------|-----------------------------------|---------------------------------------------------|--------------------------------------------|
@@ -310,7 +346,7 @@ CREATE TABLE customer_accounts (
 | T10  | T10_ReschedAppt.py                | (conn, account_id, new_date_str, new_slot)        | Reschedule existing appointment            |
 | T11  | T11_SetReminder.py                | (conn, account_id)                                | Day-before reminder at 10AM                |
 | T12  | T12_ExecuteMoveCancel.py          | (conn, account_id, action, ...)                   | Execute MOVE or CANCEL                     |
-| T13  | T13_SendConfirmationReceipt.py    | (account_id, action_type, details={})             | Generate receipt -- opens own DB conn      |
+| T13  | T13_SendConfirmationReceipt.py    | (account_id, action_type, details={})             | Generate receipt — opens own DB conn       |
 
 **Critical input difference:**
 - T2 takes `address_id` (e.g., "A01")
@@ -332,8 +368,8 @@ CREATE TABLE customer_accounts (
 
 ## Shared Business Rules
 
-### Fee Waiver -- 3-Rule Logic (T8)
-All three must be true for $0 fee. Any failure = $99 install fee.
+### Fee Waiver — 3-Rule Logic (T8)
+All three must be true for $0 fee. Any single failure = $99 install fee.
 - **Rule A:** tenure_years > 3
 - **Rule B:** autopay_active = 1
 - **Rule C:** last_waiver_date is NULL or older than 12 months
@@ -345,7 +381,13 @@ pending_balance must be $0.00 before Move or Cancel proceeds. No exceptions.
 
 ### Billing Rules
 - Bill due: 1st of next month
-- Flat monthly rate only -- no proration, no credits
+- **Flat monthly rate only — no taxes, no fees, no surcharges**
+- **No proration — ever.** Full rule:
+  - The current billing month is always charged at the **old rate in full**, regardless of when a plan change or move occurs during the month.
+  - The new rate takes effect at the start of the **next billing cycle (1st of next month)**.
+  - There are no partial-month credits, no pro-rated refunds, and no mid-cycle adjustments.
+  - Example: Customer on Fiber 1 Gig ($80/mo) moves to Fiber 500 ($65/mo) on March 15. March bill = **$80**. April 1st bill = **$65**.
+  - If a customer asks "do I get credit for the days I was on the old plan?" → Answer: "Plan changes take effect at the start of your next billing cycle. Your current month is billed at your existing rate in full — there's no proration or partial-month credit."
 - No early termination fee (month-to-month)
 - Equipment return: within 14 days to avoid unreturned equipment fee
 
@@ -368,17 +410,20 @@ pending_balance must be $0.00 before Move or Cancel proceeds. No exceptions.
 | Scenario                              | Required Behavior                                                    |
 |---------------------------------------|----------------------------------------------------------------------|
 | Wrong account ID twice                | Pivot to general help; stop prompting                                |
-| Account status = CANCELED             | Inform, do not reactivate, offer sales_agent                         |
+| Account status = CANCELED             | Inform, do not reactivate, offer da1_sales_agent                     |
 | Move to same address                  | "You are already at that address."                                   |
 | Move to Occupied address              | "That address is already in service."                                |
 | Address not in DB                     | "We do not serve that area."                                         |
 | Copper address, customer wants Fiber  | Explain Copper constraint; do not offer Fiber                        |
-| Ambiguous consent to payment          | Require explicit Yes/No -- do not charge                             |
+| Ambiguous consent to payment          | Require explicit Yes/No — do not charge                              |
 | Customer asks to update card          | Card Security HARD STOP script                                       |
-| Customer asks for discount/promo      | Pivot to T8 waiver check -- do NOT hard-stop                         |
+| Customer asks for discount/promo      | Pivot to T8 waiver check — do NOT hard-stop                          |
+| Customer asks about proration/credit  | "No proration. Current month billed at old rate. New rate from 1st." |
+| Customer asks about taxes             | "Flat monthly rate — no added taxes or fees."                        |
 | Appointment more than 30 days out     | Reject; ask for earlier date                                         |
 | Appointment in the past               | Reject; ask for future date                                          |
 | Cancel on already-CANCELED account    | "Account is already canceled."                                       |
+| Copper → Fiber move                   | Notify: Copper modem incompatible, technician installs new ONT       |
 | Troubleshooting / repair request      | Out-of-scope hard stop                                               |
 
 ---
@@ -399,30 +444,23 @@ pending_balance must be $0.00 before Move or Cancel proceeds. No exceptions.
 
 ---
 
-## LoopAgent Self-Reflection Architecture
+## LoopAgent Self-Reflection Architecture (CP3 Reference)
 
-**File:** `A5_Move_Cancel_LoopAgent.py` (main folder — LIVE)
-**Status:** Archived — `Archive/A5_Move_Cancel_LoopAgent.py`. Swapped back to single-agent `moves_agent` during active debugging to reduce LLM call overhead (3 calls/turn → 1 call/turn).
+**Status:** Archived — `Archive/A5_Move_Cancel_LoopAgent.py`. Replaced in CP4 by the 3-tier architecture (SA1 + DA agents). Kept for reference as a self-reflection pattern demonstration.
 
 **Pattern comparison:**
 | Approach | Where | Status | Notes |
 |---|---|---|---|
-| Inline PRE-SEND CHECK | A5_Move_Cancel_Agent.py | **LIVE** | 1 LLM call/turn — faster for debugging |
-| True LoopAgent critique | Archive/A5_Move_Cancel_LoopAgent.py | Archived | 3 LLM calls/turn — restore when demo is stable |
+| 3-tier SA1 + DAs | SA1_Moves_Supervisor.py + DA1-DA4 | **LIVE (CP4)** | True yield-and-resume; clean tool ownership |
+| Inline PRE-SEND CHECK | Archive/A5_Move_Cancel_Agent.py | Archived (CP3) | Monolith Squad — 1 LLM call/turn |
+| True LoopAgent critique | Archive/A5_Move_Cancel_LoopAgent.py | Archived (CP3) | 3 LLM calls/turn self-reflection pattern |
 
-**Three agents in the loop:**
+**LoopAgent three-agent structure (reference):**
 | Agent | Model | Tools | Role |
 |---|---|---|---|
-| MoverDrafter | gemini-2.5-flash-lite | All 8 | Generates customer response. No self-check. |
-| BusinessRulesCritic | gemini-2.5-flash | None | Audits 7 business rules. Outputs APPROVED or VIOLATION lines. |
-| RefinerOrExiter | gemini-2.5-flash-lite | None | Passes approved draft unchanged; rewrites only flagged violations. |
-
-**Loop mechanics:**
-- `LoopAgent(max_iterations=1)` — one clean pass: draft → audit → fix/pass. max_iterations=2 was removed because a 2nd MoverDrafter iteration caused self-response bugs (drafter saw its own output as a customer message).
-- Exit via `event.actions.escalate` (ADK native) — no `exit_loop` tool (that is a LangGraph pattern)
-- State shared via conversation history (`include_contents='default'`) — no TypedDict (also LangGraph)
-
-**Business rules audited (7):** Balance Gate, Explicit Consent, Fee Waiver Integrity, Address Check Before Order, Plan Confirmed Before Scheduling, No Internal Variable Exposure, No Premature Move Confirmation
+| MoverDrafter | gemini-2.5-flash-lite | All 8 | Generates customer response |
+| BusinessRulesCritic | gemini-2.5-flash | None | Audits 7 business rules |
+| RefinerOrExiter | gemini-2.5-flash-lite | None | Passes or rewrites |
 
 **Import path (if restoring):** `from metro_city_demo.Archive.A5_Move_Cancel_LoopAgent import move_cancel_loop`
 
@@ -432,102 +470,80 @@ pending_balance must be $0.00 before Move or Cancel proceeds. No exceptions.
 
 - **Language:** Python 3
 - **Framework:** Google ADK (`google.adk.agents`, `google.adk.tools`)
-- **LLM:** `gemini-2.5-flash` for root_agent and moves_agent; `gemini-2.5-flash-lite` for all other domain agents
-- **moves_agent MUST use `gemini-2.5-flash`** — flash-lite intermittently returns `Part(text=None)` after multi-tool chains (T9), causing agent_tool.py to return '' and breaking Turns 3-5. Do NOT downgrade moves_agent to flash-lite.
+- **LLM:** `gemini-2.5-flash` for root_agent, SA1_MovesSupervisor, DA4_ExecuteMoveAgent; `gemini-2.5-flash-lite` for DA1, DA2, DA3
+- **SA1 and DA4 MUST use `gemini-2.5-flash`** — flash-lite intermittently returns `Part(text=None)` after multi-tool chains, causing agent_tool.py to return '' and breaking multi-step flows. Do NOT downgrade.
 - **DB:** SQLite via `sqlite3`; connection object passed as `conn`
 - **Tool injection:** `functools.partial(tool_fn, conn)` wraps all DB tools before FunctionTool
-- **Tool naming:** T{N}_{PascalCaseName}.py -- file name and function name match
-- **Agent naming:** snake_case Python variable (e.g., service_agent, move_cancel_loop)
+- **Tool naming:** T{N}_{PascalCaseName}.py — file name and function name match
+- **Agent naming:** DA{N}_{PascalCase} for domain agents; SA{N}_{PascalCase} for supervisors
 - **Each tool file has a `if __name__ == "__main__":` test block** for isolated testing
-- **T13 exception:** Opens its own sqlite3.connect("metro_city.db") -- never wrap with create_db_tool
+- **T13 exception:** Opens its own sqlite3.connect("metro_city.db") — never wrap with create_db_tool
 - **All tool responses are dicts** with at minimum a "status" key ("success" / "error" / "info")
-- **Server launch:** `cd c:\Muru_Workspace && adk web` — must run from PARENT directory, not from inside metro_city_demo/
-- **Archive/:** `Archive/` contains reference implementations (A5_Move_Cancel_LoopAgent.py — LoopAgent pattern; restore when demo is stable)
-- **reflection/:** `reflection/` folder and `__init__.py` retained but empty of live code
+- **Server launch:** `cd c:\Muru_Workspace && adk web` — must run from PARENT directory
+- **Archive/:** Contains CP3 reference implementations — do not delete, do not import into live agent.py
 
 ---
 
 ## Test Infrastructure
 
-**File:** `c:\Muru_Workspace\test_conversation.py` (parent directory, not inside metro_city_demo/)
-**Purpose:** Headless simulation of a full end-to-end conversation using ADK Runner — no web UI required. Used to reproduce bugs and verify fixes in the move/cancel flow.
+**File:** `metro_city_demo/Agent Sim/test_conversation.py`
+**Run from:** `c:\Muru_Workspace` (parent directory)
+**Command:** `py "metro_city_demo/Agent Sim/test_conversation.py"`
 
 **How it works:**
 - Loads `.env` from `metro_city_demo/` for the Gemini API key
 - Creates an ADK `Runner` with `InMemorySessionService` directly (bypasses `adk web`)
 - Runs a hardcoded multi-turn conversation against the live `root_agent`
-- Prints each turn's user input, agent response text, and all tool calls at root level
-- Tracks whether T12_ExecuteMoveCancel was called and with which arguments
-- Resets `metro_city.db` via `z_reset_world.py` at the end so data is clean for the next run
+- Prints each turn's user input and agent response
+- Tracks root-level tool calls (T1, SA1_MovesSupervisor visible; inner DA/T12 calls inside SA1 not visible at root level)
+- Prints DB verification table after every run (original account status + new accounts created)
 
-**Persona 3 test — Account 10004 (Mike), billing gate + waiver FAIL, 5 turns ✅ VALIDATED:**
-```python
-TURNS = [
-    (1, "I want to move to 100 First St. Cancel if fiber not available. Waive fees. Account 10004."),
-    (2, "Sure"),
-    (3, "Fiber 1 Gig"),
-    (4, "Option 2 is fine"),
-    (5, "Yes"),
-]
-```
-
-**Persona 1 test — Account 10001 (Muru), zero balance + waiver PASS, 4 turns:**
-```python
-TURNS = [
-    (1, "Hi, I'd like to move my service to 200 Second St. Account 10001."),
-    (2, "Fiber 1 Gig"),
-    (3, "Option 2 is fine"),
-    (4, "Yes"),
-]
-```
-
-**Run command (from c:\Muru_Workspace):**
-```bash
-python test_conversation.py
-```
+**Note:** Always run `py metro_city_demo/z_reset_world.py` before each test to ensure a clean DB state.
 
 **Limitations:**
-- Only root-level tool calls are captured in event tracking; inner tool calls within LoopAgent sub-agents are not directly visible
-- Output file is written to the same directory as the script
+- T12 and inner DA tool calls are not captured at root level — verify via DB verification table
+- Only one persona active at a time (comment/uncomment TURNS block)
 
 ---
 
-## Bug Fix History (via Simulation Runs)
+## Bug Fix History
 
-Bugs discovered and fixed using `test_conversation.py` against the live move/cancel flow:
+Bugs discovered and fixed during CP3 and CP4 simulation runs:
 
 | Bug | Root Cause | Fix Applied |
 |-----|-----------|-------------|
-| **Balance gate bypass** | MoverDrafter's text-based SIGNAL detection saw "Fiber 1 Gig" in T1_GetUpdateContact tool result (customer's current plan) and falsely triggered SIGNAL 3, jumping to plan selection before checking balance | Rewrote SIGNAL detection to be tool-call-history-based — signals only fire when the named tool appears in prior turn's call history |
-| **"Sure" misinterpreted as plan selection** | root_agent routed "Sure" (consent to payment) to billing_agent instead of move_cancel_loop | Strengthened routing rules: affirmative responses mid-move go to move_cancel_loop, not billing_agent |
-| **Step merging** | MoverDrafter combined multiple state machine steps into one response (e.g., fiber + fee + plan question in one message) | Added explicit HARD STOP instructions and ONE-STEP-PER-RESPONSE guardrails throughout STATE 3A |
-| **T12 fires action="CANCEL" instead of "MOVE"** | "Cancel if fiber not available" in original user request caused MoverDrafter to pass action="CANCEL" to T12 even when fiber was available | Added explicit guardrail in STATE 3A Step C and STATE 4: action="MOVE" is mandatory in the MOVE flow; cancel condition is evaluated in STATE 2 only |
-| **"We're all set" without calling T9** | In SIGNAL 3, after customer named a plan, MoverDrafter used completion language without calling T9_BookAppt | Strengthened SIGNAL 3 instruction: after plan named, MUST call T9, present 4 slots, forbidden to use completion language |
-| **Wrong fee waiver for 2yr tenure** | BusinessRulesCritic Rule 3 only checked whether T8 was called, not whether the drafter's fee claim matched T8's actual result | Rewrote Rule 3 to cross-check T8 tool result (ground truth) against drafter's fee statement |
-| **max_iterations=2 self-response bug** | With 2 iterations, MoverDrafter saw its own iteration-1 response in history and treated it as a customer message, producing one-word "Yes." replies | Set max_iterations=1 (one clean draft→audit→fix pass) |
-| **VA responses too verbose** | MoverDrafter produced multi-paragraph responses with previews of future steps | Added BREVITY GUARDRAILS (rules 10-13): one step per response, 2-4 sentences max, no step previews, no tool pre-announcements |
-| **Tool-history SIGNALs never fired** | AgentTool creates a fresh InMemorySession on every invocation (agent_tool.py line 155), so no prior tool call history ever exists | Replaced all tool-history SIGNALs with text-based HANDOFF SIGNALS read from the supervisor's handoff message |
-| **Part(text=None) after T9 tool chain** | gemini-2.5-flash-lite intermittently returns a final event with `Part(text=None)` after multi-tool chains; agent_tool.py's last_content fallback returns '' | (1) Patched agent_tool.py to accumulate text across all events (not just last_content). (2) Upgraded moves_agent model to `gemini-2.5-flash` — do NOT revert to flash-lite |
-| **VA silent after fiber+fee (no plan question)** | SIGNAL C, STATE 1 CASE C, and the YES-payment path all had "ABSOLUTE HARD STOP after MESSAGE 2" preventing the plan question | Changed all three paths to close with "Which internet plan would you like at your new address? Our most popular is Fiber 1 Gig at $80/mo." before the hard stop |
-| **T3 address NOT_FOUND with trailing period** | LLMs end handoff sentences with periods — "200 Second St." — breaking T3's LIKE match against "200 Second St" in DB | Added `new_address = new_address.strip().rstrip('.,!?;:')` in T3 before the LIKE query |
+| **Balance gate bypass** | SIGNAL detection saw "Fiber 1 Gig" in T1 result and falsely triggered plan selection | Rewrote SIGNAL detection to be transcript-text-based |
+| **"Sure" misrouted** | root_agent routed consent-to-pay "Sure" to billing_agent instead of moves_agent | Strengthened disambiguation: affirmatives mid-move → sa1_moves_supervisor |
+| **Step merging** | Agent combined multiple state machine steps into one response | Added HARD STOP instructions and ONE-STEP-PER-RESPONSE guardrails |
+| **T12 fires action="CANCEL"** | "Cancel if fiber not available" bled into SIGNAL D | Guardrail: action="MOVE" mandatory at SIGNAL D; cancel evaluated in STATE 2 only |
+| **Silent after fee (no plan question)** | Hard stop prevented the plan question from being asked after fee check | All SIGNAL C paths close with the plan question before hard stop |
+| **Wrong fee waiver claimed** | SA1 hallucinated "fee waived" after payment, conflating balance clearing with fee waiver | Added explicit grounding: fee result comes ONLY from DA2 response text. Payment ≠ waiver. |
+| **"Taxes apply" in post-move bill** | root_agent handoff to DA2 included "taxes will apply" context; DA2 echoed it | DA2 CASE A now always outputs "No added taxes or fees" regardless of incoming context |
+| **Part(text=None) after T9** | gemini-2.5-flash-lite returns Part(text=None) after multi-tool chains | SA1 and DA4 upgraded to gemini-2.5-flash — do NOT revert |
+| **T3 NOT_FOUND with trailing period** | LLMs append periods to street addresses; T3's LIKE query fails on "200 Second St." | Strip trailing punctuation before passing to T3 |
 
 ---
 
-## Validated Personas (Snapshot 2026-03-20)
+## Validated Personas (CP4 — 2026-03-23)
 
-These personas run end-to-end with DB confirmation. Do not break these flows when fixing other personas.
+All personas run end-to-end with DB confirmation against the 3-tier CP4 architecture.
 
-| Persona | Account | Archetype | Key Conditions | Status | Turns | DB Verified |
-|---------|---------|-----------|----------------|--------|-------|-------------|
-| Persona 3 | 10004 Mike | Debtor / billing gate | balance=$82.45, tenure=2yr (waiver FAIL) | ✅ VALIDATED | 5 | New acct 10021 at A11, Fiber 1 Gig, start 2026-03-22 |
+| Persona | Account | Archetype | Key Conditions | Turns | DB Result |
+|---------|---------|-----------|----------------|-------|-----------|
+| 1 — Muru    | 10001 | Perfect waiver     | $0 balance, waiver PASS (4.2yr, autopay ON)      | 4 | ✅ CANCELED→10021 ACTIVE A12, Fiber 1G |
+| 2 — John    | 10002 | Waiver FAIL x2     | $0 balance, tenure 0.5yr + autopay OFF           | 4 | ✅ CANCELED→10021 ACTIVE A14, Fiber 500 |
+| 3 — Mike    | 10004 | Billing gate       | $82.45 balance, waiver FAIL (tenure 2yr)         | 5 | ✅ CANCELED→10021 ACTIVE A11, Fiber 1G |
+| 4 — Sarah   | 10003 | Copper→Fiber       | $0 balance, waiver PASS (5yr), ONT migration msg | 4 | ✅ CANCELED→10021 ACTIVE A15, Fiber 1G |
+| 5 — Robert  | 10011 | Churned win-back   | CANCELED account, routed to DA1 for new service  | 2 | ✅ No DB write (new service not completed) |
+| 6 — Emily   | 10005 | Double dipper      | $0 balance, Rule C FAIL (prior waiver 12m)       | 4 | ✅ CANCELED→10021 ACTIVE A17, Fiber 300 |
+| Stress Test | 10004 | Difficult customer | Card security + plan browsing + post-move bill   | 8 | ✅ CANCELED→10021 ACTIVE A11, Fiber 1G |
 
-**Persona 3 must-not-break checklist:**
-- Turn 1: T5a fires, balance=$82.45, VA asks for payment consent. Does NOT proceed.
-- Turn 2: SIGNAL C fires — T5_PayBill + T3("100 First St") + T8 all in one response. Ends with plan question.
-- Turn 3: SIGNAL A fires — T9 (no date), 4 slots presented, HARD STOP.
-- Turn 4: SIGNAL D fires — T9(date) + T3(silent) + T12(action="MOVE") + T13 all in one response. action is "MOVE" not "CANCEL".
-- Turn 5: SIGNAL E fires — T11 set, conversation closed.
-- DB: old account CANCELED with end_date=day-before; new account ACTIVE at new address.
+**Stress test must-not-break checklist:**
+- Turn 2: Card security hard stop — new card rejected, no payment attempted
+- Turn 3: Card-on-file consent → SIGNAL C chain (pay + addr + fee DENIED $99)
+- Turn 4: Full Fiber plan table shown inline — no DA1 call, no detour
+- Turn 6: Move executed — DB write confirmed
+- Turn 8: Post-move bill answered from context — T7 NOT called (old account CANCELED)
 
 ---
 
@@ -536,5 +552,5 @@ These personas run end-to-end with DB confirmation. Do not break these flows whe
 Run `z_reset_world.py` to drop and recreate all tables, re-seed all 20 addresses, 20 accounts, and 5 plans.
 
 ```bash
-python z_reset_world.py
+py metro_city_demo/z_reset_world.py
 ```

@@ -5,40 +5,41 @@ graph TD
     %% Uber → Supervisor → Domain
     %% ============================================================
 
-    U["UBER AGENT — root_agent  ★ THIN ★<br>gemini-2.5-flash<br>Auth · Disambiguate · Route only<br>No domain logic · No state machine"]
+    subgraph ARCH["DIAGRAM 1 — Proposed Multi-Agent Architecture (3-Tier: Uber → Supervisor → Domain)"]
+        direction TB
 
-    U --> T1["T1: Get/Update Contact<br>(Direct Tool — on Uber Agent)"]
+        U["UBER AGENT — root_agent  ★ THIN ★<br>gemini-2.5-flash<br>Auth · Disambiguate · Route only<br>No domain logic · No state machine"]
 
-    U --> SVC["SERVICEABILITY AGENT<br>A1 · flash-lite<br>Coverage & Tech Check"]
-    U --> SA["SALES AGENT<br>A2 · flash-lite<br>Plans & Upgrades"]
-    U --> B["BILLING AGENT<br>A3 · flash-lite<br>Payments · Autopay · Next Bill"]
-    U --> SCH["SCHEDULING AGENT<br>A4 · flash-lite<br>Appointments · Reschedule"]
-    U --> MS["MOVE SUPERVISOR<br>NEW · flash<br>Macro State Machine<br>Yield & Resume Orchestrator<br>No tools · Reasoning only"]
+        U --> T1["T1: Get/Update Contact<br>(Direct Tool — on Uber Agent)"]
 
-    SVC --> T2a["T2: Fiber Check Serviceability"]
+        U --> SA["SALES AGENT<br>A2 · flash-lite<br>Serviceability · Plans · Upgrades"]
+        U --> B["BILLING AGENT<br>A3 · flash-lite<br>Payments · Autopay · Next Bill"]
+        U --> SCH["SCHEDULING AGENT<br>A4 · flash-lite<br>Appointments · Reschedule"]
+        U --> MS["MOVE SUPERVISOR<br>NEW · flash<br>Macro State Machine<br>Yield & Resume Orchestrator<br>No tools · Reasoning only"]
 
-    SA --> T2b["T2: Fiber Check Serviceability"]
-    SA --> T4["T4: Max Speed Plan"]
+        SA --> T2["T2: Fiber Check Serviceability"]
+        SA --> T4["T4: Max Speed Plan"]
 
-    B --> T5b["T5: Pay Bill"]
-    B --> T5a["T5a: Get Balance"]
-    B --> T6["T6: Autopay Toggle"]
-    B --> T7["T7: Calc Next Bill"]
-    B --> T8["T8: Check Fee Waiver"]
-    B --> T13a["T13: Send Receipt"]
+        B --> T5b["T5: Pay Bill"]
+        B --> T5a["T5a: Get Balance"]
+        B --> T6["T6: Autopay Toggle"]
+        B --> T7["T7: Calc Next Bill"]
+        B --> T8["T8: Check Fee Waiver"]
+        B --> T13a["T13: Send Receipt"]
 
-    SCH --> T9a["T9: Book Appt"]
-    SCH --> T10["T10: Resched Appt"]
-    SCH --> T11a["T11: Set Reminder"]
+        SCH --> T9a["T9: Book Appt"]
+        SCH --> T10["T10: Resched Appt"]
+        SCH --> T11a["T11: Set Reminder"]
 
-    MS --> B2["BILLING AGENT<br>A3 · (shared)<br>Balance Gate + Fee Waiver"]
-    MS --> MA["MOVES AGENT  ★ THIN ★<br>A5 · flash-lite<br>Equipment Logic + Execute only"]
-    MS --> SA2["SALES AGENT<br>A2 · (shared)<br>Plan Selection"]
-    MS --> SCH2["SCHEDULING AGENT<br>A4 · (shared)<br>Appointment + Reminder"]
+        MS --> B2["BILLING AGENT<br>A3 · shared<br>Balance Gate + Fee Waiver"]
+        MS --> MA["MOVES AGENT  ★ THIN ★<br>A5 · flash-lite<br>Equipment Logic + Execute only"]
+        MS --> SA2["SALES AGENT<br>A2 · shared<br>Plan Selection"]
+        MS --> SCH2["SCHEDULING AGENT<br>A4 · shared<br>Appointment + Reminder"]
 
-    MA --> T3["T3: Equipment Logic<br>DB lookup: Fiber/Copper<br>Vacant/Occupied · addr_id"]
-    MA --> T12["T12: Exec Move/Cancel<br>addr_id + plan_name + date"]
-    MA --> T13b["T13: Send Receipt"]
+        MA --> T3["T3: Equipment Logic<br>DB lookup: Fiber/Copper<br>Vacant/Occupied · addr_id"]
+        MA --> T12["T12: Exec Move/Cancel<br>addr_id + plan_name + date"]
+        MA --> T13b["T13: Send Receipt"]
+    end
 
     style U fill:#cfe2ff
     style MS fill:#ffd966
@@ -46,13 +47,13 @@ graph TD
     style B2 fill:#d9ead3
     style SA2 fill:#d9ead3
     style SCH2 fill:#d9ead3
+    style ARCH fill:#f8f9fa
 
     %% ============================================================
     %% DIAGRAM 2: Move Supervisor — Yield & Resume State Machine
-    %% Sequence across a full move flow (e.g. Persona 3: Mike 10004)
     %% ============================================================
 
-    subgraph FLOW["MOVE SUPERVISOR — Yield & Resume State Machine"]
+    subgraph FLOW["DIAGRAM 2 — Move Supervisor: Yield & Resume State Machine"]
         direction TB
 
         F0["STATE 0 — Entry<br>Receive move intent from root_agent<br>Read conversation history to detect resume point"]
@@ -86,10 +87,10 @@ graph TD
     style FLOW fill:#f8f9fa
 
     %% ============================================================
-    %% DIAGRAM 3: Clean Tool Ownership (no duplication)
+    %% DIAGRAM 3: Clean Tool Ownership — Single Source of Truth
     %% ============================================================
 
-    subgraph TOOLS["Tool Ownership — Single Source of Truth"]
+    subgraph TOOLS["DIAGRAM 3 — Tool Ownership: Single Source of Truth (no duplication)"]
         direction LR
 
         subgraph TB1["billing_agent owns"]
@@ -118,7 +119,7 @@ graph TD
 
         subgraph TB4["sales_agent owns"]
             direction TB
-            TB4A["T2: Fiber Check"]
+            TB4A["T2: Fiber Check Serviceability"]
             TB4B["T4: Max Speed Plan"]
         end
     end

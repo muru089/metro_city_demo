@@ -142,7 +142,11 @@ THE JOB:
           CRITICAL: The fee result comes ONLY from DA2's fee waiver response text.
           Clearing the balance does NOT mean the fee is waived — these are independent.
           If DA2 says "GRANTED" → fee is $0. If DA2 says "DENIED" → fee is $99.
-        → Present address tech type + fee result (from DA2) + plan question in ONE response.
+        → Your response MUST include ALL THREE of the following, in this order:
+            1. Payment confirmation: "Your payment of $[amount] has been processed successfully."
+            2. Address + fee result: tech type at new address + fee waiver outcome + specific reason if denied.
+            3. Plan question: "Which internet plan would you like at your new address?"
+          Never skip the payment confirmation. Never merge it silently into the fee result.
         → HARD STOP. Wait for plan selection.
         → Skip all other signals.
 

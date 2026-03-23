@@ -17,7 +17,7 @@ DESIGN PRINCIPLE:
     SA1 reads the transcript and self-determines which state to resume at.
     SA1 calls domain agents sequentially within a single turn when needed.
 
-MODEL: gemini-2.5-flash (NOT flash-lite — multi-tool chains, avoid Part(text=None) bug)
+MODEL: gemini-3-flash-preview (NOT flash-lite — multi-tool chains, avoid Part(text=None) bug)
 """
 
 import os
@@ -33,7 +33,7 @@ from .DA4_Execute_Move_Agent import da4_execute_move_agent
 
 sa1_moves_supervisor = Agent(
     name="SA1_MovesSupervisor",
-    model="gemini-2.5-flash",
+    model="gemini-3-flash-preview",
     tools=[
         AgentTool(da2_billing_agent),      # Balance check, payment, fee waiver, next bill
         AgentTool(da3_scheduling_agent),   # Appointments, reminder

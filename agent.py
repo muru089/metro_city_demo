@@ -8,7 +8,7 @@ ROLE      : Single entry point. Handles auth, safety, disambiguation, and routin
 ARCHITECTURE OVERVIEW:
     This is a 3-tier multi-agent graph:
 
-    root_agent  (Uber Agent — this file)               gemini-2.5-flash
+    root_agent  (Uber Agent — this file)               gemini-3-flash-preview
       |-- T1_GetUpdateContact      (direct tool: auth + contact lookup)
       |-- DA1_SalesAgent           (Domain: serviceability + plans, T2+T4)
       |-- DA2_BillingAgent         (Domain: payments, autopay, balance, T5+T5a+T6+T7+T8+T13)
@@ -75,7 +75,7 @@ t1_tool = FunctionTool(bound_t1)
 # =============================================================================
 root_agent = Agent(
     name="supervisor_agent",
-    model="gemini-2.5-flash",
+    model="gemini-3-flash-preview",
 
     tools=[
         t1_tool,                           # Direct tool: authentication

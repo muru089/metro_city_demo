@@ -67,7 +67,7 @@ t13_tool = FunctionTool(T13_SendConfirmationReceipt)
 
 da4_execute_move_agent = Agent(
     name="DA4_ExecuteMoveAgent",
-    model="gemini-2.5-flash",
+    model="gemini-3-flash-preview",
     tools=[t3_tool, t12_tool, t13_tool],
     instruction="""
 You are the Move Execution Specialist (Squad Agent) for Metro City Internet.

@@ -64,7 +64,7 @@ def _after_tool(tool: BaseTool, args: dict[str, Any], tool_context: CallbackCont
 
 sa1_moves_supervisor = Agent(
     name="SA1_MovesSupervisor",
-    model="gemini-3-flash-preview",
+    model="gemini-2.5-flash",
     tools=[
         AgentTool(da2_billing_agent),      # Balance check, payment, fee waiver, next bill
         AgentTool(da3_scheduling_agent),   # Appointments, reminder
@@ -142,11 +142,13 @@ THE JOB:
           CRITICAL: The fee result comes ONLY from DA2's fee waiver response text.
           Clearing the balance does NOT mean the fee is waived — these are independent.
           If DA2 says "GRANTED" → fee is $0. If DA2 says "DENIED" → fee is $99.
-        → Your response MUST include ALL THREE of the following, in this order:
-            1. Payment confirmation: "Your payment of $[amount] has been processed successfully."
-            2. Address + fee result: tech type at new address + fee waiver outcome + specific reason if denied.
-            3. Plan question: "Which internet plan would you like at your new address?"
-          Never skip the payment confirmation. Never merge it silently into the fee result.
+        → Build your response using this EXACT structure — do not skip any line:
+            Line 1 (REQUIRED): "Your payment of $[amount from DA2] has been processed successfully."
+            Line 2 (REQUIRED): "[tech_type] is available at [street_address]."
+            Line 3 (REQUIRED): Fee result — if GRANTED: "Your installation fee is waived ($0)."
+                                            if DENIED:  "The installation fee is $99. [specific reason from DA2]."
+            Line 4 (REQUIRED): "Which internet plan would you like at your new address? Our most popular option is Fiber 1 Gig at $80/mo."
+          Line 1 is NEVER optional. Never start the response with the fee or the plan question.
         → HARD STOP. Wait for plan selection.
         → Skip all other signals.
 

@@ -51,6 +51,21 @@ agents with clean tool ownership, and genuine yield-and-resume via conversation 
 | T13 exception | Opens its own DB connection — never wrapped with create_db_tool |
 | LoopAgent | Stays archived (Archive/A5_Move_Cancel_LoopAgent.py) — not wired in CP4 |
 | Old A1-A5 files | Moved to Archive/ — not deleted, git history preserved |
+| SA1 state detection | Approach B — root_agent passes FULL conversation context in handoff to SA1, not a summary. SA1 reads the transcript and self-determines which state it is in. More robust than relying on root_agent to correctly summarize state across 5-7 turns. |
+| DA agent calls from SA1 | SA1 calls domain agents sequentially via AgentTool within a single turn when needed (e.g., SIGNAL C: DA2 pay → DA4 address check → DA2 fee check in one SA1 response). Each domain agent gets account_id + task in the call message. |
+| T3 called twice in move flow | Acceptable. T3 is read-only. SA1 calls DA4 for address check (STATE 2, T3 only). SA1 calls DA4 again for execute (STATE 6, T3 → T12 → T13). addr_id does not need to be passed across turns — DA4 re-derives it from the street string each time. |
+| DA4 dual-mode | DA4_Execute_Move_Agent handles both address check ("check address X") and move execution ("execute move: account X, address Y, plan Z, date W"). Instruction distinguishes modes by verb in the incoming message. |
+
+---
+
+## Architecture Findings Log
+
+### Finding 1 — SA1 Fresh Session Problem (resolved)
+**Issue:** SA1_Moves_Supervisor gets a fresh InMemorySession on every AgentTool invocation from root_agent. It has no memory of prior tool results or state.
+
+**Rejected approach (A):** Root_agent summarizes state and crafts a rich 1-liner handoff. Risk: root_agent may drop context across 5-7 turns.
+
+**Chosen approach (B):** Root_agent passes the FULL relevant conversation transcript as the handoff to SA1. SA1 reads it and self-determines which state it's in using HANDOFF SIGNALS — same pattern as the old A5, just at the supervisor level. More robust.
 
 ---
 

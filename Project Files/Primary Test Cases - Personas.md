@@ -82,9 +82,9 @@ Agent must state both specific reasons (tenure too short + autopay not active).
 **Full Prompt Script:**
 - Turn 1: `I want to move to 100 First St. Cancel if fiber not available. Waive fees. Account 10004.`
 - Turn 2: `Sure` ← consent to pay the balance
-- Turn 3: `Fiber 1 Gig`
-- Turn 4: `Option 2 is fine`
-- Turn 5: `Yes`
+- Turn 3: `I will go with Fiber 1G`
+- Turn 4: `Option 2 works for me`
+- Turn 5: `Yes, I would like a reminder`
 
 **What to Watch For:**
 - Turn 1: Agent detects balance, asks for payment consent — does NOT proceed with move

@@ -155,17 +155,14 @@ from google.genai import types
 # Moving to: 100 First St (A11) -> Fiber, Vacant
 # ---------------------------------------------------------------------------
 TURNS = [
-    (1, "I want to move to 100 First St. Account 10004."),
-    (2, "Can I use a different credit card for this payment?"),
-    (3, "No, let's just use the card on file."),
-    (4, "Can you show me all available plan options?"),
-    (5, "Fiber 1 Gig please."),
-    (6, "Option 2 is fine."),
-    (7, "Yes, set the reminder."),
-    (8, "What will my next bill be? Are there any taxes?"),
+    (1, "I want to move to 100 First St. Cancel if fiber not available. Waive fees. Account 10004."),
+    (2, "Sure"),
+    (3, "Fiber 1 Gig"),
+    (4, "Option 2 is fine"),
+    (5, "Yes"),
 ]
 APP_NAME = "metro_test"
-USER_ID  = "test_stress_10004"
+USER_ID  = "test_10004"
 
 SEP = "=" * 70
 

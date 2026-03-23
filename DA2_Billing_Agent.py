@@ -210,8 +210,10 @@ THE JOB:
     CASE A — Message explicitly states customer's new plan and price
               (e.g., "customer just moved to Fiber 1 Gig at $80/mo"):
         Answer from the message context. Do NOT call T7.
-        Return: "The new [plan name] plan is $[price]/mo, flat rate.
-                 Next bill due on the 1st of [next month]. No proration, no taxes or fees."
+        ALWAYS include the no-tax statement — even if the incoming message says "taxes apply".
+        Metro City is flat rate. There are NEVER any added taxes or fees.
+        Return: "Your new [plan name] plan is $[price]/mo, flat rate.
+                 Next bill is due on the 1st of [next month]. No added taxes or fees."
 
     CASE B — Normal next-bill inquiry (no new plan context):
         Call T7_CalcNextBill(account_id).

@@ -1,0 +1,130 @@
+graph TD
+
+    %% ============================================================
+    %% DIAGRAM 1: Proposed Multi-Agent Architecture (3-Tier)
+    %% Uber → Supervisor → Domain
+    %% ============================================================
+
+    U["UBER AGENT — root_agent  ★ THIN ★<br>gemini-2.5-flash<br>Auth · Disambiguate · Route only<br>No domain logic · No state machine"]
+
+    U --> T1["T1: Get/Update Contact<br>(Direct Tool — on Uber Agent)"]
+
+    U --> SVC["SERVICEABILITY AGENT<br>A1 · flash-lite<br>Coverage & Tech Check"]
+    U --> SA["SALES AGENT<br>A2 · flash-lite<br>Plans & Upgrades"]
+    U --> B["BILLING AGENT<br>A3 · flash-lite<br>Payments · Autopay · Next Bill"]
+    U --> SCH["SCHEDULING AGENT<br>A4 · flash-lite<br>Appointments · Reschedule"]
+    U --> MS["MOVE SUPERVISOR<br>NEW · flash<br>Macro State Machine<br>Yield & Resume Orchestrator<br>No tools · Reasoning only"]
+
+    SVC --> T2a["T2: Fiber Check Serviceability"]
+
+    SA --> T2b["T2: Fiber Check Serviceability"]
+    SA --> T4["T4: Max Speed Plan"]
+
+    B --> T5b["T5: Pay Bill"]
+    B --> T5a["T5a: Get Balance"]
+    B --> T6["T6: Autopay Toggle"]
+    B --> T7["T7: Calc Next Bill"]
+    B --> T8["T8: Check Fee Waiver"]
+    B --> T13a["T13: Send Receipt"]
+
+    SCH --> T9a["T9: Book Appt"]
+    SCH --> T10["T10: Resched Appt"]
+    SCH --> T11a["T11: Set Reminder"]
+
+    MS --> B2["BILLING AGENT<br>A3 · (shared)<br>Balance Gate + Fee Waiver"]
+    MS --> MA["MOVES AGENT  ★ THIN ★<br>A5 · flash-lite<br>Equipment Logic + Execute only"]
+    MS --> SA2["SALES AGENT<br>A2 · (shared)<br>Plan Selection"]
+    MS --> SCH2["SCHEDULING AGENT<br>A4 · (shared)<br>Appointment + Reminder"]
+
+    MA --> T3["T3: Equipment Logic<br>DB lookup: Fiber/Copper<br>Vacant/Occupied · addr_id"]
+    MA --> T12["T12: Exec Move/Cancel<br>addr_id + plan_name + date"]
+    MA --> T13b["T13: Send Receipt"]
+
+    style U fill:#cfe2ff
+    style MS fill:#ffd966
+    style MA fill:#fff2cc
+    style B2 fill:#d9ead3
+    style SA2 fill:#d9ead3
+    style SCH2 fill:#d9ead3
+
+    %% ============================================================
+    %% DIAGRAM 2: Move Supervisor — Yield & Resume State Machine
+    %% Sequence across a full move flow (e.g. Persona 3: Mike 10004)
+    %% ============================================================
+
+    subgraph FLOW["MOVE SUPERVISOR — Yield & Resume State Machine"]
+        direction TB
+
+        F0["STATE 0 — Entry<br>Receive move intent from root_agent<br>Read conversation history to detect resume point"]
+
+        F0 --> F1["STATE 1 — Balance Gate<br>yield → billing_agent (T5a)<br>If balance > $0: ask consent → yield → billing_agent (T5)<br>Resume when balance = $0"]
+
+        F1 --> F2["STATE 2 — Address Check<br>yield → moves_agent (T3)<br>Validates: Vacant · Fiber/Copper · addr_id<br>Traps: same address · occupied · out of footprint"]
+
+        F2 --> F3["STATE 3 — Fee Check<br>yield → billing_agent (T8)<br>3-rule waiver logic<br>Inform customer: $0 or $99 + specific reason"]
+
+        F3 --> F4["STATE 4 — Plan Selection<br>yield → sales_agent (T4)<br>Default: Fiber 1 Gig $80<br>Wait for explicit plan confirmation"]
+
+        F4 --> F5["STATE 5 — Appointment<br>yield → scheduling_agent (T9)<br>Rule of 4 slots · 30-day window<br>Wait for slot selection"]
+
+        F5 --> F6["STATE 6 — Execute<br>yield → moves_agent (T12 + T13)<br>action=MOVE · addr_id · plan · date<br>Receipt sent"]
+
+        F6 --> F7["STATE 7 — Reminder Offer<br>yield → scheduling_agent (T11)<br>Optional · customer decides"]
+
+        F7 --> F8["DONE — Yield back to root_agent"]
+    end
+
+    style F0 fill:#e8eaf6
+    style F1 fill:#fce8e6
+    style F2 fill:#fff2cc
+    style F3 fill:#fff2cc
+    style F4 fill:#d9ead3
+    style F5 fill:#d9ead3
+    style F6 fill:#cfe2ff
+    style F7 fill:#cfe2ff
+    style F8 fill:#e8eaf6
+    style FLOW fill:#f8f9fa
+
+    %% ============================================================
+    %% DIAGRAM 3: Clean Tool Ownership (no duplication)
+    %% ============================================================
+
+    subgraph TOOLS["Tool Ownership — Single Source of Truth"]
+        direction LR
+
+        subgraph TB1["billing_agent owns"]
+            direction TB
+            TB1A["T5: Pay Bill"]
+            TB1B["T5a: Get Balance"]
+            TB1C["T6: Autopay Toggle"]
+            TB1D["T7: Calc Next Bill"]
+            TB1E["T8: Check Fee Waiver"]
+            TB1F["T13: Send Receipt (billing)"]
+        end
+
+        subgraph TB2["moves_agent owns"]
+            direction TB
+            TB2A["T3: Equipment Logic"]
+            TB2B["T12: Exec Move/Cancel"]
+            TB2C["T13: Send Receipt (move)"]
+        end
+
+        subgraph TB3["scheduling_agent owns"]
+            direction TB
+            TB3A["T9: Book Appt"]
+            TB3B["T10: Resched Appt"]
+            TB3C["T11: Set Reminder"]
+        end
+
+        subgraph TB4["sales_agent owns"]
+            direction TB
+            TB4A["T2: Fiber Check"]
+            TB4B["T4: Max Speed Plan"]
+        end
+    end
+
+    style TOOLS fill:#f8f9fa
+    style TB1 fill:#fce8e6
+    style TB2 fill:#fff2cc
+    style TB3 fill:#d9ead3
+    style TB4 fill:#e8eaf6

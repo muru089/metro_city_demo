@@ -84,11 +84,11 @@ graph TD
     style F0 fill:#e8eaf6
     style F1 fill:#fce8e6
     style F2 fill:#fff2cc
-    style F3 fill:#fff2cc
-    style F4 fill:#d9ead3
+    style F3 fill:#fce8e6
+    style F4 fill:#e8eaf6
     style F5 fill:#d9ead3
-    style F6 fill:#cfe2ff
-    style F7 fill:#cfe2ff
+    style F6 fill:#fff2cc
+    style F7 fill:#d9ead3
     style F8 fill:#e8eaf6
     style FLOW fill:#f8f9fa
 

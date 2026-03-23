@@ -32,18 +32,24 @@ graph TD
         SCH --> T11a["T11: Set Reminder"]
 
         MS --> B2["BILLING AGENT<br>A3 · shared<br>Balance Gate + Fee Waiver"]
-        MS --> MA["MOVES AGENT  ★ THIN ★<br>A5 · flash-lite<br>Equipment Logic + Execute only"]
         MS --> SA2["SALES AGENT<br>A2 · shared<br>Plan Selection"]
         MS --> SCH2["SCHEDULING AGENT<br>A4 · shared<br>Appointment + Reminder"]
 
-        MA --> T3["T3: Equipment Logic<br>DB lookup: Fiber/Copper<br>Vacant/Occupied · addr_id"]
-        MA --> T12["T12: Exec Move/Cancel<br>addr_id + plan_name + date"]
-        MA --> T13b["T13: Send Receipt"]
+        subgraph MA_GRP["MOVES AGENT  ★ THIN ★  —  A5 · flash-lite"]
+            direction TB
+            MA["Equipment Logic + Execute only"]
+            MA --> T3["T3: Equipment Logic<br>DB lookup: Fiber/Copper<br>Vacant/Occupied · addr_id"]
+            MA --> T12["T12: Exec Move/Cancel<br>addr_id + plan_name + date"]
+            MA --> T13b["T13: Send Receipt"]
+        end
+
+        MS --> MA_GRP
     end
 
     style U fill:#cfe2ff
     style MS fill:#ffd966
     style MA fill:#fff2cc
+    style MA_GRP fill:#fff2cc
     style B2 fill:#d9ead3
     style SA2 fill:#d9ead3
     style SCH2 fill:#d9ead3
